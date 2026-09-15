@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="text-lg font-bold text-white mb-5">Ringkasan Operasional</h2>
+
+<div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+    <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl flex items-center justify-between">
+        <div>
+            <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Timbangan Hari Ini</p>
+            <h3 class="text-2xl font-bold text-white mt-1">{{ summary.total_hari_ini }} <span class="text-xs text-slate-400 font-normal">Truk</span></h3>
+        </div>
+        <div class="bg-blue-500/10 text-blue-400 p-3 rounded-lg border border-blue-500/20">
+            <i class="fa-solid fa-truck text-xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl flex items-center justify-between">
+        <div>
+            <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Netto Hari Ini</p>
+            <h3 class="text-2xl font-bold text-emerald-400 mt-1">{{ "{:,.0f}".format(summary.total_netto) }} <span class="text-xs text-slate-400 font-normal">Kg</span></h3>
+        </div>
+        <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-lg border border-emerald-500/20">
+            <i class="fa-solid fa-weight-hanging text-xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl flex items-center justify-between">
+        <div>
+            <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Supir Terdaftar</p>
+            <h3 class="text-2xl font-bold text-white mt-1">{{ summary.total_supir }} <span class="text-xs text-slate-400 font-normal">Orang</span></h3>
+        </div>
+        <div class="bg-purple-500/10 text-purple-400 p-3 rounded-lg border border-purple-500/20">
+            <i class="fa-solid fa-id-card text-xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl flex items-center justify-between">
+        <div>
+            <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">SIM Kadaluarsa</p>
+            <h3 class="text-2xl font-bold {{ 'text-amber-400' if summary.sim_expired > 0 else 'text-white' }} mt-1">{{ summary.sim_expired }} <span class="text-xs text-slate-400 font-normal">Supir</span></h3>
+        </div>
+        <div class="bg-amber-500/10 text-amber-400 p-3 rounded-lg border border-amber-500/20">
+            <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+        </div>
+    </div>
+</div>
+
+<div class="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center">
+    <a href="/timbang" class="text-emerald-400 hover:underline text-sm">
+        <i class="fa-solid fa-weight-scale mr-1"></i> Mulai timbang truk baru →
+    </a>
+</div>
+{% endblock %}

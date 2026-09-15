@@ -1,0 +1,42 @@
+CREATE DATABASE TimbanganSawitDB;
+GO
+
+USE TimbanganSawitDB;
+GO
+
+CREATE TABLE Supir (
+    Id INT PRIMARY KEY IDENTITY,
+    NIK VARCHAR(20) UNIQUE,
+    Nama VARCHAR(100) NOT NULL,
+    NomorSIM VARCHAR(30) NULL,
+    SIMBerlakuSampai DATE NULL,
+    FaceEmbedding VARBINARY(MAX) NOT NULL,
+    FotoPath VARCHAR(255) NULL,
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+GO
+
+CREATE TABLE Kendaraan (
+    Id INT PRIMARY KEY IDENTITY,
+    PlatNomor VARCHAR(20) UNIQUE NOT NULL,
+    JenisTruk VARCHAR(50) NULL,
+    AsalPengepul VARCHAR(100) NULL,
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+GO
+
+CREATE TABLE TransaksiTimbang (
+    Id INT PRIMARY KEY IDENTITY,
+    SupirId INT NOT NULL FOREIGN KEY REFERENCES Supir(Id),
+    KendaraanId INT NOT NULL FOREIGN KEY REFERENCES Kendaraan(Id),
+    NomorTiket VARCHAR(30) UNIQUE NOT NULL,
+    WaktuMasuk DATETIME NULL,
+    BeratBruto DECIMAL(10,2) NULL,
+    WaktuKeluar DATETIME NULL,
+    BeratTara DECIMAL(10,2) NULL,
+    BeratNetto AS (BeratBruto - BeratTara) PERSISTED,
+    HashKeamanan VARCHAR(64) NULL,
+    Status VARCHAR(20) DEFAULT 'Proses',
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+GO

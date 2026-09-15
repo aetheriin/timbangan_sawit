@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Timbang{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-5">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-weight-scale text-emerald-400"></i> Pembacaan Timbangan
+        </h2>
+
+        <div class="bg-slate-900 border border-slate-700 rounded-xl p-8 text-center">
+            <p class="text-xs text-slate-400 uppercase tracking-wider mb-2">Berat Saat Ini</p>
+            <h1 id="beratDisplay" class="text-6xl font-bold font-mono text-white">0</h1>
+            <p class="text-sm text-slate-400 mt-1">Kg</p>
+            <div id="statusBadge" class="inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300">
+                Menunggu simulasi dimulai
+            </div>
+        </div>
+
+        <button id="btnMulai" onclick="mulaiTimbang()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">
+            <i class="fa-solid fa-play mr-2"></i>Mulai Simulasi Timbang
+        </button>
+
+        <div class="space-y-3 pt-2 border-t border-slate-700">
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1.5">Plat Nomor Kendaraan</label>
+                <input type="text" id="platNomor" placeholder="B 1234 XYZ" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            <div id="panelVerifikasi" class="bg-slate-900 border border-slate-700 rounded-xl p-4 flex items-center gap-3">
+                <div id="iconVerifikasi" class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-400">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <div>
+                    <p id="teksVerifikasi" class="text-sm text-slate-300">Menunggu verifikasi wajah dari kiosk...</p>
+                    <p class="text-xs text-slate-500">Silakan lakukan live scan di kiosk.py</p>
+                </div>
+            </div>
+        </div>
+
+        <button id="btnKunci" onclick="kunciTimbang()" disabled class="w-full bg-slate-600 text-slate-400 font-semibold py-3 rounded-xl cursor-not-allowed transition">
+            <i class="fa-solid fa-lock mr-2"></i>Kunci Berat
+        </button>
+
+        <div id="hasilBox" class="hidden p-4 rounded-xl text-sm"></div>
+    </div>
+
+    <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+        <h2 class="text-base font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-3 mb-4">
+            <i class="fa-solid fa-circle-info text-emerald-400"></i> Cara Kerja
+        </h2>
+        <ol class="text-xs text-slate-400 space-y-3 list-decimal list-inside">
+            <li>Klik "Mulai Simulasi Timbang" sistem mensimulasikan truk naik ke timbangan</li>
+            <li>Tunggu sampai angka berat stabil (badge berubah hijau)</li>
+            <li>Isi plat nomor dan ambil foto wajah supir</li>
+            <li>Klik "Kunci Berat" sistem verifikasi wajah dan mencatat transaksi</li>
+            <li>Sistem otomatis tahu apakah ini timbang masuk atau keluar</li>
+        </ol>
+        <div class="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-300">
+            <i class="fa-solid fa-flask mr-1"></i> Mode simulasi berat dummy, belum terhubung ke timbangan asli
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let polling = null;
+    let siapKunci = false;
+    let supirTerverifikasi = false;
+
+    async function mulaiTimbang() {
+        document.getElementById('btnMulai').disabled = true;
+        document.getElementById('hasilBox').classList.add('hidden');
+        await fetch('/timbang/mulai', { method: 'POST' });
+        polling = setInterval(cekStatus, 300);
+    }
+
+    async function cekStatus() {
+        const response = await fetch('/timbang/status');
+        const data = await response.json();
+
+        document.getElementById('beratDisplay').textContent = data.berat;
+
+        const badge = document.getElementById('statusBadge');
+        const btnKunci = document.getElementById('btnKunci');
+
+        if (data.siap_kunci) {
+            badge.className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400";
+            badge.textContent = "STABIL — siap dikunci";
+            btnKunci.disabled = false;
+            btnKunci.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl transition";
+            btnKunci.innerHTML = '<i class="fa-solid fa-lock-open mr-2"></i>Kunci Berat';
+            siapKunci = true;
+        } else if (data.stabil) {
+            badge.className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400";
+            badge.textContent = "Menstabilkan...";
+        } else {
+            badge.className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400";
+            badge.textContent = "Berat sedang naik...";
+        }
+    }
+
+    setInterval(async () => {
+        const response = await fetch('/timbang/status-verifikasi');
+        const data = await response.json();
+        if (data.terverifikasi && !supirTerverifikasi) {
+            supirTerverifikasi = true;
+            document.getElementById('iconVerifikasi').className = "w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center";
+            document.getElementById('iconVerifikasi').innerHTML = '<i class="fa-solid fa-check"></i>';
+            document.getElementById('teksVerifikasi').textContent = `Terverifikasi: ${data.nama}`;
+            cekBisaKunci();
+        }
+    }, 1000);
+
+    function cekBisaKunci() {
+        const btnKunci = document.getElementById('btnKunci');
+        if (siapKunci && supirTerverifikasi) {
+            btnKunci.disabled = false;
+            btnKunci.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl transition";
+        }
+    }
+
+    async function kunciTimbang() {
+        if (!siapKunci || !supirTerverifikasi) return;
+        const plat = document.getElementById('platNomor').value.trim();
+        if (!plat) { tampilkanHasil("Isi plat nomor dulu", false); return; }
+
+        const formData = new FormData();
+        formData.append('plat_nomor', plat);
+
+        const response = await fetch('/timbang/kunci', { method: 'POST', body: formData });
+        const data = await response.json();
+        tampilkanHasil(data.message || data.error, !!data.message);
+        if (data.message) { clearInterval(polling); resetTampilan(); supirTerverifikasi = false; }
+    }
+
+    function tampilkanHasil(teks, sukses) {
+        const box = document.getElementById('hasilBox');
+        box.className = sukses
+            ? "p-4 rounded-xl text-sm bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+            : "p-4 rounded-xl text-sm bg-red-500/10 border border-red-500/30 text-red-300";
+        box.textContent = teks;
+        box.classList.remove('hidden');
+    }
+
+    function resetTampilan() {
+        document.getElementById('btnMulai').disabled = false;
+        document.getElementById('beratDisplay').textContent = "0";
+        document.getElementById('statusBadge').className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300";
+        document.getElementById('statusBadge').textContent = "Menunggu simulasi dimulai";
+        document.getElementById('btnKunci').disabled = true;
+        document.getElementById('btnKunci').className = "w-full bg-slate-600 text-slate-400 font-semibold py-3 rounded-xl cursor-not-allowed transition";
+        document.getElementById('btnKunci').innerHTML = '<i class="fa-solid fa-lock mr-2"></i>Kunci Berat (belum stabil)';
+        document.getElementById('platNomor').value = "";
+        document.getElementById('fotoSupir').value = "";
+        siapKunci = false;
+    }
+</script>
+{% endblock %}

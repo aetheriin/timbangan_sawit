@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Riwayat Transaksi{% endblock %}
+
+{% block content %}
+<div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-emerald-400"></i> Riwayat Transaksi Timbangan
+        </h2>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+                <tr>
+                    <th class="p-3 whitespace-nowrap">Tiket</th>
+                    <th class="p-3 whitespace-nowrap">Supir</th>
+                    <th class="p-3 whitespace-nowrap">Plat</th>
+                    <th class="p-3 whitespace-nowrap">Masuk</th>
+                    <th class="p-3 whitespace-nowrap">Bruto (Kg)</th>
+                    <th class="p-3 whitespace-nowrap">Keluar</th>
+                    <th class="p-3 whitespace-nowrap">Tara (Kg)</th>
+                    <th class="p-3 whitespace-nowrap">Netto (Kg)</th>
+                    <th class="p-3 whitespace-nowrap">Status</th>
+                    <th class="p-3 whitespace-nowrap">Hash</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-700/50">
+                {% for row in data %}
+                <tr class="hover:bg-slate-700/30 transition">
+                    <td class="p-3 font-mono">{{ row.NomorTiket }}</td>
+                    <td class="p-3 font-medium text-white">{{ row.NamaSupir }}</td>
+                    <td class="p-3"><span class="bg-slate-900 px-2 py-0.5 rounded border border-slate-600 font-mono text-emerald-400">{{ row.PlatNomor }}</span></td>
+                    <td class="p-3 font-mono">{{ row.WaktuMasuk.strftime('%d/%m %H:%M') if row.WaktuMasuk else '-' }}</td>
+                    <td class="p-3 font-mono">{{ "{:,.0f}".format(row.BeratBruto) if row.BeratBruto else '-' }}</td>
+                    <td class="p-3 font-mono">{{ row.WaktuKeluar.strftime('%d/%m %H:%M') if row.WaktuKeluar else '-' }}</td>
+                    <td class="p-3 font-mono text-slate-400">{{ "{:,.0f}".format(row.BeratTara) if row.BeratTara else '-' }}</td>
+                    <td class="p-3 font-mono font-bold text-emerald-400">{{ "{:,.0f}".format(row.BeratNetto) if row.BeratNetto else '-' }}</td>
+                    <td class="p-3">
+                        {% if row.Status == 'Selesai' %}
+                        <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px]">SELESAI</span>
+                        {% else %}
+                        <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full text-[10px]">MENUNGGU KELUAR</span>
+                        {% endif %}
+                    </td>
+                    <td class="p-3 font-mono text-[10px] text-slate-500" title="{{ row.HashKeamanan }}">{{ row.HashKeamanan[:12] }}...</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
