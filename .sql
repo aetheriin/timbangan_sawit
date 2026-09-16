@@ -1,3 +1,3 @@
 USE TimbanganSawitDB;
 
-SELECT * FROM TransaksiTimbang;
+select * from Supir;

@@ -45,8 +45,9 @@
                         <span class="text-slate-500">-</span>
                         {% endif %}
                     </td>
-                    <td class="p-3 text-right">
-                        <button class="text-slate-400 hover:text-red-400"><i class="fa-solid fa-trash"></i></button>
+                    <td class="p-3 text-right space-x-2">
+                        <button onclick="openEditModal('{{ row.Id }}', '{{ row.Nama }}', '{{ row.NIK if row.NIK else '' }}', '{{ row.NomorSIM if row.NomorSIM else '' }}', '{{ row.SIMBerlakuSampai if row.SIMBerlakuSampai else '' }}')" class="text-slate-400 hover:text-blue-400"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="hapusSupir('{{ row.Id }}')" class="text-slate-400 hover:text-red-400"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -104,6 +105,41 @@
             <div class="flex justify-end space-x-3 pt-2">
                 <button type="button" onclick="closeModal('modalDaftar')" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-xs">Batal</button>
                 <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-xl text-xs">Daftar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modalEdit" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+            <h3 class="font-bold text-white text-base">Edit Data Supir</h3>
+            <button onclick="closeModal('modalEdit')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <form id="form-edit" enctype="multipart/form-data" class="space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1.5">Nama</label>
+                <input type="text" id="edit-nama" name="nama" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1.5">NIK</label>
+                <input type="number" id="edit-nik" name="nik" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1.5">Nomor SIM</label>
+                <input type="text" id="edit-sim" name="nomor_sim" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1.5">SIM Berlaku Sampai</label>
+                <input type="date" id="edit-sim-berlaku" name="sim_berlaku" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1.5">Ganti Foto (opsional)</label>
+                <input type="file" name="foto" accept="image/*" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none">
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+                <button type="button" onclick="closeModal('modalEdit')" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-xs">Batal</button>
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-xl text-xs">Simpan</button>
             </div>
         </form>
     </div>
@@ -179,5 +215,34 @@
             if (data.message) { closeModal('modalDaftar'); location.reload(); }
         } catch (err) { alert("Gagal menghubungi server: " + err); }
     });
+
+function openEditModal(id, nama, nik, sim, simBerlaku) {
+    document.getElementById('edit-nama').value = nama;
+    document.getElementById('edit-nik').value = nik;
+    document.getElementById('edit-sim').value = sim;
+    document.getElementById('edit-sim-berlaku').value = simBerlaku;
+    document.getElementById('form-edit').action = `/supir/edit/${id}`;
+    openModal('modalEdit');
+}
+
+document.getElementById("form-edit").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    try {
+        const response = await fetch(this.action, { method: "POST", body: formData });
+        const data = await response.json();
+        alert(data.message || data.error || "Terjadi kesalahan");
+        if (data.message) { closeModal('modalEdit'); location.reload(); }
+    } catch (err) { alert("Gagal menghubungi server: " + err); }
+});
+
+async function hapusSupir(id) {
+    if (!confirm("Nonaktifkan supir ini? Data riwayat timbang tetap tersimpan.")) return;
+    const res = await fetch(`/supir/hapus/${id}`, { method: 'POST' });
+    const data = await res.json();
+    alert(data.message || data.error);
+    if (data.message) location.reload();
+}
+
 </script>
 {% endblock %}

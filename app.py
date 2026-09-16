@@ -4,20 +4,33 @@ import uuid
 from flask import Flask, request, jsonify, render_template, redirect
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
-from utils.face_utils import extract_embedding, embedding_to_binary, binary_to_embedding, compare_faces, verifikasi_liveness
+
+from utils.face_utils import (
+    extract_embedding, embedding_to_binary, binary_to_embedding, 
+    compare_faces, verifikasi_liveness
+)
 from utils.auth import User
 from utils.db_utils import (
     get_connection, insert_supir, get_all_supir, get_daftar_supir, get_supir_by_id,
-    get_or_create_kendaraan, cari_transaksi_terbuka, catat_timbang_masuk,
-    catat_timbang_keluar, get_riwayat_transaksi, get_user_by_username, update_last_login, 
-    get_daftar_supir, cek_nik_supir_ada, cari_wajah_mirip_supir, get_dashboard_summary_timbang
+    get_or_create_kendaraan, catat_timbang_masuk, catat_timbang_keluar, get_riwayat_transaksi, 
+    get_user_by_username, update_last_login, cek_nik_supir_ada, cari_wajah_mirip_supir, 
+    get_dashboard_summary_timbang, buat_tiket_security, cari_transaksi_by_qr, nonaktifkan_supir, 
+    get_supir_lengkap_by_id, update_supir
 )
 from utils.timbang_state import mulai_simulasi, baca_status, reset_sesi
 from utils.verifikasi_state import set_terverifikasi, get_verifikasi, reset_verifikasi
 
 app = Flask(__name__)
 app.secret_key = "ganti-dengan-random-string-rahasia"
-UPLOAD_FOLDER = "static/uploads"
+
+# Pastikan folder upload ada agar tidak crash saat save file
+UPLOAD_FOLDER = os.path.join("static", "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+camera_trigger_state = {
+    "is_active": False,
+    "last_scanned_driver": None
+}
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -60,9 +73,104 @@ def logout():
     logout_user()
     return redirect("/login")
 
+# -----------------------------------------------------------------------------
+# 1. POS SECURITY CHECK-IN & TRIGGER KAMERA
+# -----------------------------------------------------------------------------
+@app.route("/security")
+@login_required
+def security_page():
+    return render_template("security.html", active_page="security")
+
+@app.route("/api/kamera/start", methods=["POST"])
+def api_kamera_start():
+    """Trigger dari Web Security untuk menyalakan kamera kiosk_timbang.py."""
+    camera_trigger_state["is_active"] = True
+    camera_trigger_state["last_scanned_driver"] = None
+    reset_verifikasi()
+    return jsonify({"status": "SUCCESS", "message": "Kamera Kiosk diaktifkan"}), 200
+
+@app.route("/api/kamera/status", methods=["GET"])
+def api_kamera_status():
+    """Endpoint polling yang dipanggil kiosk_timbang.py setiap 1 detik."""
+    return jsonify({"is_active": camera_trigger_state["is_active"]}), 200
+
+@app.route("/api/kamera/batal", methods=["POST"])
+def api_kamera_batal():
+  """Dipanggil oleh kiosk_timbang.py jika kamera ditutup manual oleh user (Tombol X / Q)."""
+  camera_trigger_state["is_active"] = False
+  camera_trigger_state["last_scanned_driver"] = None
+  reset_verifikasi()
+  return jsonify(
+      {"status": "SUCCESS", "message": "Trigger kamera dibatalkan"}
+  ), 200
+
+@app.route("/api/security/cetak-tiket", methods=["POST"])
+@login_required
+def api_cetak_tiket():
+    """Security menginput plat nomor & generate UUID acak untuk QR Code Struk yang tersimpan di DB."""
+    data = request.json or {}
+    plat_nomor = data.get("plat_nomor", "").strip().upper()
+    nik_supir = data.get("nik", "").strip()
+    nama_supir = data.get("nama", "").strip()
+
+    if not plat_nomor or not nik_supir:
+        return jsonify({"error": "Plat nomor dan NIK supir wajib diisi"}), 400
+
+    # 1. Ambil ID supir dari Database berdasarkan NIK (atau ID yang dikirim)
+    supir = get_supir_by_id(nik_supir)
+    supir_id = supir.Id if supir else nik_supir
+
+    # 2. Tokenisasi QR Code (UUID Acak)
+    qr_token = f"TKT-{uuid.uuid4().hex[:8].upper()}"
+
+    # 3. Simpan langsung ke database via db_utils
+    buat_tiket_security(supir_id, plat_nomor, qr_token)
+
+    return jsonify({
+        "status": "SUCCESS",
+        "qr_token": qr_token,
+        "plat_nomor": plat_nomor,
+        "nama_supir": nama_supir
+    }), 200
+
+# -----------------------------------------------------------------------------
+# 2. POS JEMBATAN TIMBANG (BRUTO & TARA)
+# -----------------------------------------------------------------------------
 @app.route("/timbang")
+@login_required
 def timbang():
     return render_template("timbang.html", active_page="timbang")
+
+@app.route("/api/timbang/scan-qr", methods=["POST"])
+def api_scan_qr():
+    """Lookup data supir & plat langsung dari Database SQL berdasarkan Token QR yang di-scan."""
+    data = request.json or {}
+    token = data.get("qr_token", "").strip().upper()
+
+    # Query ke Database via db_utils
+    row = cari_transaksi_by_qr(token)
+    if not row:
+        return jsonify({"error": "Tiket QR tidak ditemukan / tidak valid!"}), 404
+
+    tiket = {
+        "id": row.Id,
+        "qr_token": row.NomorTiket,
+        "supir_id": row.SupirId,
+        "nama": row.NamaSupir,
+        "nik": row.NIK,
+        "kendaraan_id": row.KendaraanId,
+        "plat_nomor": row.PlatNomor,
+        "berat_bruto": row.BeratBruto,
+        "status": row.Status
+    }
+
+    # Set state terverifikasi agar kompatibel dengan sistem timbang
+    set_terverifikasi(row.SupirId, row.NamaSupir)
+
+    return jsonify({
+        "status": "SUCCESS",
+        "tiket": tiket
+    }), 200
 
 @app.route("/timbang/mulai", methods=["POST"])
 def timbang_mulai():
@@ -74,36 +182,39 @@ def timbang_status():
     return jsonify(baca_status())
 
 @app.route("/timbang/kunci", methods=["POST"])
+@login_required
 def timbang_kunci():
     status = baca_status()
     if not status["siap_kunci"]:
         return jsonify({"error": "Berat belum stabil"}), 400
 
-    v = get_verifikasi()
-    if v is None:
-        return jsonify({"error": "Belum ada verifikasi wajah supir"}), 400
+    qr_token = request.form.get("qr_token", "").strip().upper()
+    if not qr_token:
+        return jsonify({"error": "Tiket QR belum di-scan"}), 400
 
-    plat_nomor = request.form.get("plat_nomor", "").strip().upper()
-    if not plat_nomor:
-        return jsonify({"error": "Plat nomor wajib diisi"}), 400
+    row = cari_transaksi_by_qr(qr_token)
+    if not row:
+        return jsonify({"error": "Tiket tidak ditemukan"}), 404
 
-    supir_id, nama = v["supir_id"], v["nama"]
     berat = status["berat"]
-    kendaraan_id = get_or_create_kendaraan(plat_nomor)
-    transaksi_terbuka = cari_transaksi_terbuka(supir_id, kendaraan_id)
-
     reset_verifikasi()
+    reset_sesi()
 
-    if transaksi_terbuka is None:
-        nomor_tiket = catat_timbang_masuk(supir_id, kendaraan_id, berat, plat_nomor)
-        reset_sesi()
-        return jsonify({"message": f"Timbang MASUK berhasil. Tiket: {nomor_tiket}. Berat: {berat} kg", "supir": nama}), 200
-    else:
-        catat_timbang_keluar(transaksi_terbuka.Id, berat)
-        reset_sesi()
-        netto = transaksi_terbuka.BeratBruto - berat
-        return jsonify({"message": f"Timbang KELUAR berhasil. Berat: {berat} kg, Netto: {netto} kg", "supir": nama}), 200
+    if row.BeratBruto is None:
+        catat_timbang_masuk(row.SupirId, row.KendaraanId, berat, row.PlatNomor, qr_token)
+        return jsonify({"message": f"Timbang MASUK berhasil. Tiket: {qr_token}. Berat: {berat} kg"}), 200
 
+    if row.Status == 'Selesai' or row.Status == 'Perlu Cek Manual':
+        return jsonify({"error": "Tiket ini sudah selesai ditimbang"}), 400
+
+    netto, status_final = catat_timbang_keluar(row.Id, berat)
+    if status_final == 'Perlu Cek Manual':
+        return jsonify({"message": f"Timbang KELUAR tercatat, TAPI netto tidak valid ({netto} kg) — perlu Manual Check", "perlu_manual_check": True}), 200
+    return jsonify({"message": f"Timbang KELUAR berhasil. Berat: {berat} kg, Netto: {netto} kg"}), 200
+
+# -----------------------------------------------------------------------------
+# 3. VERIFIKASI WAJAH & LIVENESS (DARI KIOSK_TIMBANG.PY)
+# -----------------------------------------------------------------------------
 @app.route("/timbang/verifikasi-wajah", methods=["POST"])
 def verifikasi_wajah_timbang():
     files = request.files.getlist("frames")
@@ -113,34 +224,49 @@ def verifikasi_wajah_timbang():
         return jsonify({"error": "Frame tidak cukup"}), 400
 
     filepaths = []
-    for f in files:
-        filepath = os.path.join(UPLOAD_FOLDER, f"tmp_{uuid.uuid4().hex}.jpg")
-        f.save(filepath)
-        filepaths.append(filepath)
+    try:
+        for f in files:
+            filepath = os.path.join(UPLOAD_FOLDER, f"tmp_{uuid.uuid4().hex}.jpg")
+            f.save(filepath)
+            filepaths.append(filepath)
 
-    if not verifikasi_liveness(filepaths, tantangan):
-        return jsonify({"error": "Liveness tidak terverifikasi"}), 400
+        if not verifikasi_liveness(filepaths, tantangan):
+            return jsonify({"error": "Liveness tidak terverifikasi"}), 400
 
-    embedding_baru = extract_embedding(filepaths[len(filepaths) // 2])
-    if embedding_baru is None:
-        return jsonify({"error": "Wajah tidak terdeteksi"}), 400
+        embedding_baru = extract_embedding(filepaths[len(filepaths) // 2])
+        if embedding_baru is None:
+            return jsonify({"error": "Wajah tidak terdeteksi"}), 400
 
-    supir_list = get_all_supir()
-    match_found = None
-    for row in supir_list:
-        supir_id, nama, embedding_binary = row
-        embedding_tersimpan = binary_to_embedding(embedding_binary)
-        is_match, _ = compare_faces(embedding_tersimpan, embedding_baru, threshold=0.55)
-        if is_match:
-            match_found = (supir_id, nama)
-            break
+        supir_list = get_all_supir()
+        match_found = None
+        for row in supir_list:
+            supir_id, nama, embedding_binary = row
+            embedding_tersimpan = binary_to_embedding(embedding_binary)
+            is_match, _ = compare_faces(embedding_tersimpan, embedding_baru, threshold=0.55)
+            if is_match:
+                match_found = (supir_id, nama)
+                break
 
-    if not match_found:
-        return jsonify({"error": "Supir tidak dikenali"}), 404
+        if not match_found:
+            return jsonify({"error": "Supir tidak dikenali"}), 404
 
-    supir_id, nama = match_found
-    set_terverifikasi(supir_id, nama)
-    return jsonify({"message": f"Terverifikasi: {nama}"}), 200
+        supir_id, nama = match_found
+        set_terverifikasi(supir_id, nama)
+        
+        # Reset Trigger Kamera setelah berhasil scan
+        camera_trigger_state["is_active"] = False
+        camera_trigger_state["last_scanned_driver"] = {"supir_id": supir_id, "nama": nama}
+
+        return jsonify({"message": f"Terverifikasi: {nama}", "nik": supir_id, "nama": nama}), 200
+
+    finally:
+        # OPTIMASI: Hapus file temporer frame JPEG
+        for path in filepaths:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
 
 @app.route("/timbang/status-verifikasi")
 def status_verifikasi():
@@ -149,6 +275,9 @@ def status_verifikasi():
         return jsonify({"terverifikasi": False})
     return jsonify({"terverifikasi": True, "supir_id": v["supir_id"], "nama": v["nama"]})
 
+# -----------------------------------------------------------------------------
+# 4. RIWAYAT & MANAGEMENT SUPIR
+# -----------------------------------------------------------------------------
 @app.route("/riwayat")
 @login_required
 def riwayat():
@@ -184,10 +313,14 @@ def supir_register():
 
     embedding = extract_embedding(filepath)
     if embedding is None:
+        if os.path.exists(filepath):
+            os.remove(filepath)
         return jsonify({"error": "Wajah tidak terdeteksi di foto"}), 400
 
     wajah_mirip = cari_wajah_mirip_supir(embedding)
     if wajah_mirip:
+        if os.path.exists(filepath):
+            os.remove(filepath)
         _, nama_terdaftar = wajah_mirip
         return jsonify({"error": f"Wajah ini sudah terdaftar sebagai '{nama_terdaftar}'"}), 400
 
@@ -196,6 +329,52 @@ def supir_register():
 
     return jsonify({"message": f"Supir '{nama}' berhasil didaftarkan"}), 200
 
-if __name__ == "__main__":
-    app.run(debug=True)
+@app.route("/supir/hapus/<int:supir_id>", methods=["POST"])
+@login_required
+def supir_hapus(supir_id):
+    nonaktifkan_supir(supir_id)
+    return jsonify({"message": "Supir berhasil dinonaktifkan"}), 200
 
+@app.route("/supir/edit/<int:supir_id>", methods=["POST"])
+@login_required
+def supir_edit(supir_id):
+    nama = request.form.get("nama", "").strip()
+    nik = request.form.get("nik", "").strip()
+    nomor_sim = request.form.get("nomor_sim", "").strip() or None
+    sim_berlaku = request.form.get("sim_berlaku", "").strip() or None
+    file = request.files.get("foto")
+
+    if not nama:
+        return jsonify({"error": "Nama tidak boleh kosong"}), 400
+    if nik and not nik.isdigit():
+        return jsonify({"error": "NIK harus berupa angka"}), 400
+    if nik and cek_nik_supir_ada(nik, exclude_id=supir_id):
+        return jsonify({"error": f"NIK '{nik}' sudah dipakai supir lain"}), 400
+
+    embedding_binary = None
+    foto_path = None
+    if file and file.filename != "":
+        ext = os.path.splitext(file.filename)[1]
+        unique_filename = f"{uuid.uuid4().hex}{ext}"
+        filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
+        file.save(filepath)
+
+        embedding_baru = extract_embedding(filepath)
+        if embedding_baru is None:
+            os.remove(filepath)
+            return jsonify({"error": "Wajah tidak terdeteksi di foto baru"}), 400
+
+        wajah_mirip = cari_wajah_mirip_supir(embedding_baru, exclude_id=supir_id)
+        if wajah_mirip:
+            os.remove(filepath)
+            _, nama_terdaftar = wajah_mirip
+            return jsonify({"error": f"Wajah ini sudah terdaftar sebagai '{nama_terdaftar}'"}), 400
+
+        embedding_binary = embedding_to_binary(embedding_baru)
+        foto_path = f"uploads/{unique_filename}"
+
+    update_supir(supir_id, nama, nik if nik else None, nomor_sim, sim_berlaku, embedding_binary, foto_path)
+    return jsonify({"message": f"Data '{nama}' berhasil diperbarui"}), 200
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

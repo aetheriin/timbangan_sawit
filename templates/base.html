@@ -10,7 +10,21 @@
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
+    <!-- Tambahkan pustaka ini di bagian <head> base.html jika ingin auto-scan barcode via kamera webcam -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>        
     {% block extra_head %}{% endblock %}
+    <style>
+    @media print {
+        body * { visibility: hidden; }
+        #printArea, #printArea * { visibility: visible; }
+        #printArea {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+        }
+    }
+    </style>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans antialiased min-h-screen">
 
@@ -24,23 +38,38 @@
                 <span class="text-xs text-emerald-400 font-medium">PT Yuni Bersaudara Sejahtera</span>
             </div>
         </div>
+
         <div class="flex items-center space-x-6 text-sm">
+            <!-- 1. Dashboard -->
             <a href="/dashboard" class="text-slate-300 hover:text-white transition {{ 'text-emerald-400 font-semibold' if active_page == 'dashboard' }}">
                 <i class="fa-solid fa-chart-pie mr-1"></i> Dashboard
             </a>
+
+            <!-- 2. Pos Security Check-in (MENU BARU) -->
+            <a href="/security" class="text-slate-300 hover:text-white transition {{ 'text-emerald-400 font-semibold' if active_page == 'security' }}">
+                <i class="fa-solid fa-shield-halved mr-1"></i> Security
+            </a>
+
+            <!-- 3. Timbang -->
             <a href="/timbang" class="text-slate-300 hover:text-white transition {{ 'text-emerald-400 font-semibold' if active_page == 'timbang' }}">
                 <i class="fa-solid fa-weight-scale mr-1"></i> Timbang
             </a>
+
+            <!-- 4. Data Supir -->
             <a href="/supir" class="text-slate-300 hover:text-white transition {{ 'text-emerald-400 font-semibold' if active_page == 'supir' }}">
                 <i class="fa-solid fa-id-card mr-1"></i> Data Supir
             </a>
+
+            <!-- 5. Riwayat -->
             <a href="/riwayat" class="text-slate-300 hover:text-white transition {{ 'text-emerald-400 font-semibold' if active_page == 'riwayat' }}">
                 <i class="fa-solid fa-list-check mr-1"></i> Riwayat
             </a>
+
+            <!-- Auth Profile / Logout -->
             {% if current_user.is_authenticated %}
             <div class="flex items-center space-x-3 border-l border-slate-700 pl-6">
-                <span class="text-slate-300 text-xs">{{ current_user.nama_lengkap }}</span>
-                <a href="/logout" class="text-slate-400 hover:text-red-400"><i class="fa-solid fa-right-from-bracket"></i></a>
+                <span class="text-slate-300 text-xs font-medium">{{ current_user.nama_lengkap }}</span>
+                <a href="/logout" title="Logout" class="text-slate-400 hover:text-red-400 transition"><i class="fa-solid fa-right-from-bracket"></i></a>
             </div>
             {% else %}
             <a href="/login" class="text-slate-400 hover:text-white text-xs border-l border-slate-700 pl-6">
