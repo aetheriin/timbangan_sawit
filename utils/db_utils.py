@@ -248,7 +248,8 @@ def get_riwayat_transaksi():
     cursor = conn.cursor()
     cursor.execute("""
         SELECT t.Id, t.NomorTiket, s.Nama AS NamaSupir, k.PlatNomor, t.WaktuMasuk, t.BeratBruto,
-               t.WaktuKeluar, t.BeratTara, t.BeratNetto, t.Status, t.HashKeamanan, t.AlasanBatal
+               t.WaktuKeluar, t.BeratTara, t.BeratNetto, t.Status, t.HashKeamanan, t.AlasanBatal,
+               t.CatatanManual, t.FotoBuktiManual, t.DiperiksaOleh
         FROM TransaksiTimbang t
         JOIN Supir s ON t.SupirId = s.Id
         JOIN Kendaraan k ON t.KendaraanId = k.Id
@@ -270,16 +271,12 @@ def batalkan_transaksi(transaksi_id, alasan, dibatalkan_oleh):
     conn.close()
 
 def get_user_by_username(username):
-  conn = get_connection()
-  cursor = conn.cursor()
-  cursor.execute(
-      "SELECT Id, Username, PasswordHash, NamaLengkap, Role FROM Users WHERE"
-      " Username = ?",
-      username,
-  )
-  row = cursor.fetchone()
-  conn.close()
-  return row
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT Id, Username, PasswordHash, NamaLengkap, Role FROM Users WHERE Username = ? AND IsActive = 1", username)
+    row = cursor.fetchone()
+    conn.close()
+    return row
 
 def get_user_by_id(user_id):
   conn = get_connection()
@@ -375,3 +372,64 @@ def cari_wajah_mirip_supir(embedding_baru, threshold=0.55, exclude_id=None):
     if is_match:
       return (supir_id, nama)
   return None
+
+def tambah_bukti_manual(transaksi_id, catatan, foto_path=None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE TransaksiTimbang SET CatatanManual = ?, FotoBuktiManual = ? WHERE Id = ?",
+        catatan, foto_path, transaksi_id
+    )
+    conn.commit()
+    conn.close()
+
+def setujui_manual_check(transaksi_id, admin_nama):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE TransaksiTimbang SET Status = 'Selesai', DiperiksaOleh = ? WHERE Id = ?",
+        admin_nama, transaksi_id
+    )
+    conn.commit()
+    conn.close()
+
+def tolak_manual_check(transaksi_id, admin_nama, alasan):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE TransaksiTimbang SET Status = 'Ditolak', DiperiksaOleh = ?, AlasanBatal = ? WHERE Id = ?",
+        admin_nama, alasan, transaksi_id
+    )
+    conn.commit()
+    conn.close()
+
+def get_all_users():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT Id, Username, NamaLengkap, Role, IsActive, LastLogin, CreatedAt FROM Users ORDER BY CreatedAt DESC")
+    columns = [c[0] for c in cursor.description]
+    data = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    conn.close()
+    return data
+
+def cek_username_ada(username):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT Id FROM Users WHERE Username = ?", username)
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
+
+def reset_password_user(user_id, password_hash_baru):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE Users SET PasswordHash = ? WHERE Id = ?", password_hash_baru, user_id)
+    conn.commit()
+    conn.close()
+
+def toggle_status_user(user_id, status_baru):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE Users SET IsActive = ? WHERE Id = ?", status_baru, user_id)
+    conn.commit()
+    conn.close()

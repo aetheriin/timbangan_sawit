@@ -57,42 +57,175 @@
                             -
                         {% endif %}
                     </td>
-                    <td class="p-3 text-right">
-                        {% if row.Status not in ['Dibatalkan', 'Selesai'] %}
-                        <button onclick="batalkanTransaksi({{ row.Id }})" class="text-red-400 hover:text-red-300 text-xs whitespace-nowrap">
-                            <i class="fa-solid fa-ban mr-1"></i>Batalkan
-                        </button>
+                    <td class="p-3 text-right space-y-1">
+                        {% if row.Status == 'Perlu Cek Manual' %}
+                            {% if current_user.role == 'admin' %}
+                            <div class="flex flex-col items-end gap-1">
+                                <button onclick="setujuiTransaksi({{ row.Id }})" class="text-emerald-400 hover:text-emerald-300 text-xs">
+                                    <i class="fa-solid fa-check mr-1"></i>Setujui
+                                </button>
+                                <button onclick="tolakTransaksi({{ row.Id }})" class="text-red-400 hover:text-red-300 text-xs">
+                                    <i class="fa-solid fa-xmark mr-1"></i>Tolak
+                                </button>
+                                {% if row.CatatanManual %}
+                                <button
+                                    class="lihat-bukti-btn text-blue-400 hover:text-blue-300 text-[10px]"
+                                    data-catatan="{{ row.CatatanManual }}"
+                                    data-foto="{{ url_for('static', filename=row.FotoBuktiManual) if row.FotoBuktiManual else '' }}"
+                                >
+                                    <i class="fa-solid fa-eye mr-1"></i>Lihat Bukti
+                                </button>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <button onclick="tambahBukti({{ row.Id }})" class="text-blue-400 hover:text-blue-300 text-xs">
+                                <i class="fa-solid fa-camera mr-1"></i>Tambah Bukti
+                            </button>
+                            {% if row.CatatanManual %}
+                            <span class="text-slate-500 text-[10px] block mt-1">Sudah dikirim, menunggu Admin</span>
+                            {% endif %}
+                            {% endif %}
+                        {% elif row.Status == 'Ditolak' %}
+                            <span class="text-red-500 text-[10px]" title="{{ row.AlasanBatal }}">Ditolak Admin</span>
+                        {% elif row.Status not in ['Dibatalkan', 'Selesai'] and current_user.role == 'admin' %}
+                            <button onclick="batalkanTransaksi({{ row.Id }})" class="text-red-400 hover:text-red-300 text-xs">
+                                <i class="fa-solid fa-ban mr-1"></i>Batalkan
+                            </button>
                         {% elif row.Status == 'Dibatalkan' %}
-                        <span class="text-slate-600 text-[10px]" title="{{ row.AlasanBatal }}">Sudah Batal</span>
+                            <span class="text-slate-600 text-[10px]" title="{{ row.AlasanBatal }}">Sudah Batal</span>
                         {% else %}
-                        <span class="text-slate-600 text-[10px]">-</span>
+                            <span class="text-slate-600 text-[10px]">-</span>
                         {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <div id="modalBukti" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-50 p-4">
+            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-sm w-full space-y-4">
+                <h3 class="text-white font-bold text-sm">Tambah Catatan/Bukti</h3>
+                <form id="formBukti" enctype="multipart/form-data" class="space-y-3">
+                    <textarea name="catatan" required placeholder="Jelaskan kondisi truk/timbangan..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none" rows="3"></textarea>
+                    <input type="file" name="foto" accept="image/*" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                    <div class="flex gap-2">
+                        <button type="button" onclick="closeModal('modalBukti')" class="flex-1 bg-slate-700 text-white text-xs py-2 rounded-xl">Batal</button>
+                        <button type="submit" class="flex-1 bg-blue-600 text-white text-xs py-2 rounded-xl">Kirim</button>
+                    </div>
+                </form>
+            </div>
+        </div>  
+        <div id="modalLihatBukti" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-50 p-4">
+            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                    <h3 class="text-white font-bold text-sm">Catatan & Bukti dari Site</h3>
+                    <button onclick="closeModal('modalLihatBukti')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div>
+                    <p class="text-xs text-slate-400 mb-1">Catatan:</p>
+                    <p id="lihatBuktiCatatan" class="text-sm text-slate-200 bg-slate-900 border border-slate-700 rounded-xl p-3"></p>
+                </div>
+
+                <div id="lihatBuktiFotoWrapper">
+                    <p class="text-xs text-slate-400 mb-1">Foto Bukti:</p>
+                    <img id="lihatBuktiFoto" class="w-full rounded-xl border border-slate-700" src="" alt="Foto bukti">
+                </div>
+                <p id="lihatBuktiTanpaFoto" class="text-xs text-slate-500 italic hidden">Tidak ada foto bukti dilampirkan</p>
+
+                <button onclick="closeModal('modalLihatBukti')" class="w-full bg-slate-700 hover:bg-slate-600 text-white text-sm py-2.5 rounded-xl">
+                    Tutup
+                </button>
+            </div>
+        </  div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-async function batalkanTransaksi(id) {
-    const alasan = prompt("Alasan pembatalan transaksi ini:");
-    if (!alasan) return;
+    // ===== MODAL HELPER (dipakai semua modal) =====
+    function openModal(id) {
+        document.getElementById(id).classList.remove('hidden');
+        document.getElementById(id).classList.add('flex');
+    }
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('flex');
+        document.getElementById(id).classList.add('hidden');
+    }
 
-    const formData = new FormData();
-    formData.append('alasan', alasan);
+    let transaksiIdAktif = null;
 
-    try {
+    // ===== 1. SECURITY/OPERATOR: TAMBAH BUKTI =====
+    function tambahBukti(id) {
+        transaksiIdAktif = id;
+        openModal('modalBukti');
+    }
+
+    document.getElementById('formBukti').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const res = await fetch(`/riwayat/tambah-bukti/${transaksiIdAktif}`, { method: 'POST', body: formData });
+        const data = await res.json();
+        alert(data.message || data.error);
+        if (data.message) location.reload();
+    });
+
+    // ===== 2. ADMIN: LIHAT BUKTI DARI SITE =====
+    document.querySelectorAll('.lihat-bukti-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const catatan = this.dataset.catatan;
+            const foto = this.dataset.foto;
+
+            document.getElementById('lihatBuktiCatatan').textContent = catatan;
+
+            const fotoWrapper = document.getElementById('lihatBuktiFotoWrapper');
+            const tanpaFoto = document.getElementById('lihatBuktiTanpaFoto');
+            const fotoImg = document.getElementById('lihatBuktiFoto');
+
+            if (foto) {
+                fotoImg.src = foto;
+                fotoWrapper.classList.remove('hidden');
+                tanpaFoto.classList.add('hidden');
+            } else {
+                fotoWrapper.classList.add('hidden');
+                tanpaFoto.classList.remove('hidden');
+            }
+
+            openModal('modalLihatBukti');
+        });
+    });
+
+    // ===== 3. ADMIN: SETUJUI TRANSAKSI =====
+    async function setujuiTransaksi(id) {
+        if (!confirm("Setujui transaksi ini jadi Selesai?")) return;
+        const res = await fetch(`/riwayat/setujui/${id}`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || data.error);
+        if (data.message) location.reload();
+    }
+
+    // ===== 4. ADMIN: TOLAK TRANSAKSI =====
+    async function tolakTransaksi(id) {
+        const alasan = prompt("Alasan penolakan:");
+        if (!alasan) return;
+        const formData = new FormData();
+        formData.append('alasan', alasan);
+        const res = await fetch(`/riwayat/tolak/${id}`, { method: 'POST', body: formData });
+        const data = await res.json();
+        alert(data.message || data.error);
+        if (data.message) location.reload();
+    }
+
+    // ===== 5. ADMIN: BATALKAN TRANSAKSI =====
+    async function batalkanTransaksi(id) {
+        const alasan = prompt("Alasan pembatalan transaksi ini:");
+        if (!alasan) return;
+        const formData = new FormData();
+        formData.append('alasan', alasan);
         const res = await fetch(`/riwayat/batalkan/${id}`, { method: 'POST', body: formData });
         const data = await res.json();
-        alert(data.message || data.error || "Terjadi kesalahan");
+        alert(data.message || data.error);
         if (data.message) location.reload();
-    } catch (err) {
-        alert("Gagal menghubungi server: " + err);
     }
-}
 </script>
 {% endblock %}
