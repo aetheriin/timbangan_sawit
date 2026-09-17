@@ -1,3 +1,3 @@
 USE TimbanganSawitDB;
 
-select * from Supir;
+ALTER TABLE TransaksiTimbang ADD AlasanBatal VARCHAR(255) NULL;

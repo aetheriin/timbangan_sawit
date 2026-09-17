@@ -7,9 +7,7 @@ from config import get_connection_string
 def get_connection():
   return pyodbc.connect(get_connection_string())
 
-
-# ===== SUPIR =====
-
+# SUPIR
 
 def insert_supir(
     nama,
@@ -43,7 +41,6 @@ def get_all_supir():
   conn.close()
   return rows
 
-
 def get_daftar_supir():
     conn = get_connection()
     cursor = conn.cursor()
@@ -55,7 +52,6 @@ def get_daftar_supir():
     data = [dict(zip(columns, row)) for row in cursor.fetchall()]
     conn.close()
     return data
-
 
 def get_supir_by_id(supir_id):
   conn = get_connection()
@@ -96,8 +92,7 @@ def update_supir(supir_id, nama, nik, nomor_sim, sim_berlaku, embedding_binary=N
     conn.commit()
     conn.close()
 
-# ===== KENDARAAN =====
-
+# KENDARAAN
 
 def get_or_create_kendaraan(plat_nomor, jenis_truk=None):
   conn = get_connection()
@@ -119,9 +114,7 @@ def get_or_create_kendaraan(plat_nomor, jenis_truk=None):
   conn.close()
   return kendaraan_id
 
-
-# ===== TRANSAKSI TIMBANG & SECURITY (TOKENIZATION & HASH) =====
-
+# TRANSAKSI TIMBANG & SECURITY (TOKENIZATION & HASH)
 
 def hitung_hash(
     nomor_tiket,
@@ -136,7 +129,6 @@ def hitung_hash(
       f"{nomor_tiket}{supir_id}{plat_nomor}{berat_bruto}{berat_tara}{secret_key}"
   )
   return hashlib.sha256(data.encode()).hexdigest()
-
 
 def buat_tiket_security(supir_id, plat_nomor, qr_token):
   """Mencatat registrasi awal di Pos Security sebelum truk masuk timbangan."""
@@ -155,7 +147,6 @@ def buat_tiket_security(supir_id, plat_nomor, qr_token):
   conn.commit()
   conn.close()
   return qr_token
-
 
 def cari_transaksi_by_qr(qr_token):
   """Mencari data tiket aktif berdasarkan QR Token untuk di-scan di Pos Timbangan."""
@@ -176,7 +167,6 @@ def cari_transaksi_by_qr(qr_token):
   conn.close()
   return row
 
-
 def catat_timbang_masuk(supir_id, kendaraan_id, berat, plat_nomor, qr_token):
   """Mengunci Berat Bruto (Masuk) & membuat Hash Keamanan Pertama."""
   hash_val = hitung_hash(qr_token, supir_id, plat_nomor, berat)
@@ -184,7 +174,7 @@ def catat_timbang_masuk(supir_id, kendaraan_id, berat, plat_nomor, qr_token):
   conn = get_connection()
   cursor = conn.cursor()
 
-  # Cek apakah transaksi sudah dibuat dari Pos Security
+  # Pengecekan apakah transaksi sudah dibuat dari Pos Security
   cursor.execute(
       "SELECT Id FROM TransaksiTimbang WHERE NomorTiket = ?", qr_token
   )
@@ -218,54 +208,46 @@ def catat_timbang_masuk(supir_id, kendaraan_id, berat, plat_nomor, qr_token):
   conn.close()
   return qr_token
 
-
 def catat_timbang_keluar(transaksi_id, berat_tara):
-  """Mengunci Berat Tara (Keluar), menghitung Netto, dan memperbarui Hash Keamanan Akhir."""
-  conn = get_connection()
-  cursor = conn.cursor()
+    """Mengunci Berat Tara (Keluar), menghitung Netto, dan memperbarui Hash Keamanan Akhir."""
+    conn = get_connection()
+    cursor = conn.cursor()
 
-  # Ambil data transaksi awal untuk hitung hash baru
-  cursor.execute(
-      """
+    cursor.execute("""
         SELECT t.NomorTiket, t.SupirId, t.BeratBruto, k.PlatNomor
         FROM TransaksiTimbang t
         JOIN Kendaraan k ON t.KendaraanId = k.Id
         WHERE t.Id = ?
-    """,
-      transaksi_id,
-  )
-  row = cursor.fetchone()
+    """, transaksi_id)
+    row = cursor.fetchone()
 
-  if row:
-    nomor_tiket, supir_id, berat_bruto, plat_nomor = row
-    berat_netto = berat_bruto - berat_tara
-    hash_baru = hitung_hash(
-        nomor_tiket, supir_id, plat_nomor, berat_bruto, berat_tara
-    )
+    if row:
+        nomor_tiket, supir_id, berat_bruto, plat_nomor = row
+        berat_netto = berat_bruto - berat_tara
+        status_final = 'Selesai' if berat_netto > 0 else 'Perlu Cek Manual'
+        hash_baru = hitung_hash(nomor_tiket, supir_id, plat_nomor, berat_bruto, berat_tara)
 
-    cursor.execute(
-        """
-            UPDATE TransaksiTimbang 
-            SET WaktuKeluar = GETDATE(), BeratTara = ?, BeratNetto = ?, HashKeamanan = ?, Status = 'Selesai' 
+        cursor.execute("""
+            UPDATE TransaksiTimbang
+            SET WaktuKeluar = GETDATE(), BeratTara = ?, BeratNetto = ?, HashKeamanan = ?, Status = ?
             WHERE Id = ?
-        """,
-        berat_tara,
-        berat_netto,
-        hash_baru,
-        transaksi_id,
-    )
-    conn.commit()
+        """, berat_tara, berat_netto, hash_baru, status_final, transaksi_id)
 
-  conn.close()
+        conn.commit()
+        conn.close()
+        return berat_netto, status_final
 
-# ===== USER MANAGEMENT & DASHBOARD SUMMARY =====
+    conn.close()
+    return None, None
+
+# USER MANAGEMENT & DASHBOARD SUMMARY
 
 def get_riwayat_transaksi():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT t.Id, t.NomorTiket, s.Nama AS NamaSupir, k.PlatNomor, t.WaktuMasuk, t.BeratBruto,
-               t.WaktuKeluar, t.BeratTara, t.BeratNetto, t.Status, t.HashKeamanan
+               t.WaktuKeluar, t.BeratTara, t.BeratNetto, t.Status, t.HashKeamanan, t.AlasanBatal
         FROM TransaksiTimbang t
         JOIN Supir s ON t.SupirId = s.Id
         JOIN Kendaraan k ON t.KendaraanId = k.Id
@@ -276,6 +258,15 @@ def get_riwayat_transaksi():
     conn.close()
     return data
 
+def batalkan_transaksi(transaksi_id, alasan, dibatalkan_oleh):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE TransaksiTimbang SET Status = 'Dibatalkan', AlasanBatal = ? WHERE Id = ?",
+        f"{alasan} (oleh: {dibatalkan_oleh})", transaksi_id
+    )
+    conn.commit()
+    conn.close()
 
 def get_user_by_username(username):
   conn = get_connection()
@@ -289,7 +280,6 @@ def get_user_by_username(username):
   conn.close()
   return row
 
-
 def get_user_by_id(user_id):
   conn = get_connection()
   cursor = conn.cursor()
@@ -300,14 +290,12 @@ def get_user_by_id(user_id):
   conn.close()
   return row
 
-
 def update_last_login(user_id):
   conn = get_connection()
   cursor = conn.cursor()
   cursor.execute("UPDATE Users SET LastLogin = GETDATE() WHERE Id = ?", user_id)
   conn.commit()
   conn.close()
-
 
 def get_dashboard_summary_timbang():
   conn = get_connection()
@@ -342,7 +330,6 @@ def get_dashboard_summary_timbang():
       "sim_expired": sim_expired,
   }
 
-
 def insert_user(username, password_hash, nama_lengkap, role="admin"):
   conn = get_connection()
   cursor = conn.cursor()
@@ -356,7 +343,6 @@ def insert_user(username, password_hash, nama_lengkap, role="admin"):
   )
   conn.commit()
   conn.close()
-
 
 def cek_nik_supir_ada(nik, exclude_id=None):
   if not nik:
@@ -372,7 +358,6 @@ def cek_nik_supir_ada(nik, exclude_id=None):
   row = cursor.fetchone()
   conn.close()
   return row is not None
-
 
 def cari_wajah_mirip_supir(embedding_baru, threshold=0.55, exclude_id=None):
   from utils.face_utils import binary_to_embedding, compare_faces

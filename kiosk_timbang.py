@@ -29,12 +29,10 @@ face_mesh = mp_face_mesh.FaceMesh(
 EYE_LEFT = [362, 385, 387, 263, 373, 380]
 EYE_RIGHT = [33, 160, 158, 133, 153, 144]
 
-
 def frame_ke_bytes(frame):
   """Convert frame OpenCV (numpy array) jadi bytes JPEG untuk dikirim via HTTP."""
   ret, buffer = cv2.imencode('.jpg', frame)
   return io.BytesIO(buffer.tobytes())
-
 
 def kirim_ke_server(frames, tantangan):
   files = []
@@ -50,11 +48,9 @@ def kirim_ke_server(frames, tantangan):
   except Exception as e:
     return {'error': f'Gagal menghubungi server: {e}'}
 
-
 def gambar_kotak_wajah(frame, lokasi_wajah):
   for top, right, bottom, left in lokasi_wajah:
     cv2.rectangle(frame, (left, top), (right, bottom), (0, 200, 0), 2)
-
 
 def hitung_ear(landmarks, indeks_mata, w, h):
   """Menghitung Eye Aspect Ratio (EAR) untuk deteksi kedipan."""
@@ -68,7 +64,6 @@ def hitung_ear(landmarks, indeks_mata, w, h):
   d_h = np.linalg.norm(p[0] - p[3])
 
   return (d_v1 + d_v2) / (2.0 * d_h)
-
 
 def cek_liveness_lokal(frame):
   """Memeriksa apakah wajah menghadap depan dan sedang berkedip."""
@@ -103,7 +98,6 @@ def cek_liveness_lokal(frame):
 
   return menghadap_depan, kedip
 
-
 def cek_arah_wajah(landmarks, w):
   """Return rasio untuk deteksi arah hadap: <1 menoleh kanan, >1 menoleh kiri, ~1 lurus."""
   hidung = landmarks[1].x * w
@@ -112,7 +106,6 @@ def cek_arah_wajah(landmarks, w):
   jarak_kiri = abs(hidung - mata_kiri)
   jarak_kanan = abs(hidung - mata_kanan)
   return jarak_kiri / (jarak_kanan + 1e-6)
-
 
 def gambar_banner_status(frame, teks_utama, teks_sub='', warna_bg=(0, 0, 0)):
   """Menggambar banner transparan di bagian atas agar teks rapi & proporsional."""
@@ -150,7 +143,6 @@ def gambar_banner_status(frame, teks_utama, teks_sub='', warna_bg=(0, 0, 0)):
         cv2.LINE_AA,
     )
 
-
 def gambar_overlay_hasil(frame, teks_utama, teks_sub, warna):
   """Tampilan penuh saat hasil respons dari server muncul."""
   h, w = frame.shape[:2]
@@ -182,13 +174,11 @@ def gambar_overlay_hasil(frame, teks_utama, teks_sub, warna):
       cv2.LINE_AA,
   )
 
-
 def jendela_masih_terbuka():
   try:
     return cv2.getWindowProperty(NAMA_JENDELA, cv2.WND_PROP_VISIBLE) >= 1
   except cv2.error:
     return False
-
 
 def notify_batal_to_server():
     """Memberitahu server Flask bahwa scan dibatalkan agar status camera_trigger_state di-reset."""
@@ -350,16 +340,15 @@ def jalankan_verifikasi_wajah():
     cv2.destroyAllWindows()
     cv2.waitKey(1)
 
-    # Jika dibatalkan manual (tombol X / Q), beri tahu server Flask agar kamera tidak loop menyala lagi
+    # Jika dibatalkan manual (tombol X / Q)
     if dibatalkan_manual:
         notify_batal_to_server()
 
 
 def main():
-  """Main Loop Background: Siaga mendengarkan pergerakan tombol dari Web Security."""
+  """Main Loop Background Service untuk menunggu trigger dari Pos Security."""
   print("===========================================================")
   print("  KIOSK CAMERA SERVICE STANDBY - MENUNGGU TRIGGER SECURITY ")
-  print("  (Tekan Ctrl+C di terminal untuk menghentikan service)    ")
   print("===========================================================")
 
   try:

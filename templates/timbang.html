@@ -120,11 +120,15 @@
             html5QrCode = new Html5Qrcode("qr-reader");
         }
 
-        const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+        const config = { 
+            fps: 15, 
+            qrbox: { width: 250, height: 250 },
+            formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ]
+        };
 
         try {
             await html5QrCode.start(
-                { facingMode: "user" }, // atau "environment" untuk kamera belakang
+                { facingMode: "user" }, // environment untuk kamera belakang
                 config,
                 onScanSuccess
             );

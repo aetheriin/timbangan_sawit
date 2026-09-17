@@ -16,7 +16,7 @@
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Panel Left: Kamera Trigger -->
+        <!-- Kamera Trigger -->
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
             <h2 class="text-base font-bold text-white flex items-center gap-2">
                 <i class="fa-solid fa-camera text-blue-400"></i> 1. Verifikasi Wajah Supir
@@ -40,16 +40,17 @@
             </div>
         </div>
 
-        <!-- Panel Right: Form Data Check-in -->
+        <!-- Form Data Check-in -->
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
             <h2 class="text-base font-bold text-white flex items-center gap-2">
                 <i class="fa-solid fa-id-card text-emerald-400"></i> 2. Form Data Check-in
             </h2>
             
-            <form id="formCheckin" onsubmit="generateTiketBarcode(event)" class="space-y-3">
+            <form id="formCheckin" onsubmit="handleCetakTiket(event)" class="space-y-3">
                 <div>
                     <label class="block text-xs font-semibold text-slate-400 mb-1">NIK Supir</label>
                     <input type="text" id="secNik" placeholder="Terisi otomatis setelah scan..." readonly class="w-full bg-slate-900 border border-slate-700 text-slate-300 px-3.5 py-2.5 rounded-xl text-sm focus:outline-none font-mono">
+                    <input type="hidden" id="secSupirId">
                 </div>
 
                 <div>
@@ -71,14 +72,15 @@
 </div>
 
 <!-- MODAL POP-UP UNTUK TAMPILAN BARCODE -->
-<div id="modalBarcode" class="fixed inset-0 bg-black/75 hidden items-center justify-center p-4 z-50">
+<div id="modalCetakTiket" class="fixed inset-0 bg-black/75 hidden items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center max-w-md w-full space-y-4 shadow-2xl">
-        <h3 class="text-lg font-bold text-white">Tiket Barcode Berhasil Dibuat</h3>
-        
-        <!-- Canvas Tempat Gambar Barcode Digambar -->
-        <div id="printArea" class="bg-white p-4 rounded-xl inline-block w-full border-4 border-emerald-500 overflow-hidden">
-            <svg id="barcodeCanvas" class="w-full"></svg>
-            <p id="barcodeTokenText" class="text-lg font-mono font-bold text-black tracking-wider mt-2"></p>
+        <h3 class="text-lg font-bold text-white">Tiket QR Berhasil Dibuat</h3>
+
+        <div id="printArea" class="bg-white p-4 rounded-xl inline-block w-full border-4 border-emerald-500">
+            <div class="flex justify-center my-3">
+                <div id="qrcodeCanvas" class="p-2 bg-white rounded-lg inline-block"></div>
+            </div>
+            <p id="barcodeTokenText" class="text-lg font-mono font-bold text-black tracking-wider"></p>
             <p id="detailTiketText" class="text-xs text-black mt-1"></p>
         </div>
 
@@ -95,8 +97,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- Library JsBarcode untuk Render Barcode 1D (Code128) -->
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script>
 let pollingInterval = null;
@@ -110,14 +111,14 @@ async function mulaiScanWajah() {
     statusKamera.classList.remove('hidden');
 
     try {
-        // 1. Tembak API Flask untuk mengaktifkan kamera di kiosk_timbang.py
+        // API Flask untuk mengaktifkan kamera di kiosk_timbang.py
         await fetch('/api/kamera/start', { method: 'POST' });
 
         if (pollingInterval) clearInterval(pollingInterval);
 
-        // 2. Polling setiap 1 detik
+        // Polling setiap 1 detik
         pollingInterval = setInterval(async () => {
-            // A. Cek apakah verifikasi supir berhasil
+            // Pengecekan verifikasi supir
             const resVerifikasi = await fetch('/timbang/status-verifikasi');
             const dataVerifikasi = await resVerifikasi.json();
 
@@ -126,7 +127,8 @@ async function mulaiScanWajah() {
                 statusKamera.classList.add('hidden');
 
                 // Auto-fill Data Supir ke Form
-                document.getElementById('secNik').value = dataVerifikasi.supir_id;
+                document.getElementById('secNik').value = dataVerifikasi.nik || '-';
+                document.getElementById('secSupirId').value = dataVerifikasi.supir_id;
                 document.getElementById('secNama').value = dataVerifikasi.nama;
 
                 const btnCetak = document.getElementById('btnCetak');
@@ -137,12 +139,27 @@ async function mulaiScanWajah() {
                 return;
             }
 
-            // B. Cek apakah kamera dibatalkan/ditutup oleh user (Tombol X / Q)
+            // Pengecekan status kamera dibatalkan/ditutup oleh user (Tombol X / Q)
             const resKamera = await fetch('/api/kamera/status');
             const dataKamera = await resKamera.json();
 
             if (dataKamera.is_active === false) {
-                // Kamera sudah mati & belum terverifikasi -> Sembunyikan pesan loading
+                // Pengecekan ulang untuk menghindari race condition
+                const resUlang = await fetch('/timbang/status-verifikasi');
+                const dataUlang = await resUlang.json();
+
+                if (dataUlang.terverifikasi) {
+                    clearInterval(pollingInterval);
+                    statusKamera.classList.add('hidden');
+                    document.getElementById('secNik').value = dataUlang.nik || '-';
+                    document.getElementById('secSupirId').value = dataUlang.supir_id;
+                    document.getElementById('secNama').value = dataUlang.nama;
+                    document.getElementById('btnCetak').disabled = false;
+                    document.getElementById('secPlat').focus();
+                    resetTombolScan(btnScan);
+                    return;
+                }
+
                 clearInterval(pollingInterval);
                 statusKamera.classList.add('hidden');
                 resetTombolScan(btnScan);
@@ -161,14 +178,14 @@ function resetTombolScan(btn) {
     btn.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition cursor-pointer";
 }
 
-async function generateTiketBarcode(e) {
+async function handleCetakTiket(e) {
     e.preventDefault();
     const plat = document.getElementById('secPlat').value.trim();
-    const nik = document.getElementById('secNik').value.trim();
+    const supirId = document.getElementById('secSupirId').value.trim();
     const nama = document.getElementById('secNama').value.trim();
 
-    if (!plat || !nik) {
-        alert("Plat nomor dan NIK Supir wajib terisi!");
+    if (!plat || !supirId) {
+        alert("Plat nomor dan data supir wajib terisi!");
         return;
     }
 
@@ -176,26 +193,12 @@ async function generateTiketBarcode(e) {
         const res = await fetch('/api/security/cetak-tiket', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plat_nomor: plat, nik: nik, nama: nama })
+            body: JSON.stringify({ plat_nomor: plat, supir_id: supirId, nama: nama })
         });
         const result = await res.json();
 
         if (res.ok && result.status === 'SUCCESS') {
-            // Generate Barcode 1D menggunakan JsBarcode
-            JsBarcode("#barcodeCanvas", result.qr_token, {
-                format: "CODE128",
-                lineColor: "#000",
-                width: 2,
-                height: 60,
-                displayValue: true
-            });
-
-            document.getElementById('barcodeTokenText').innerText = result.qr_token;
-            document.getElementById('detailTiketText').innerText = `${result.plat_nomor} — ${result.nama_supir}`;
-            
-            const modal = document.getElementById('modalBarcode');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            generateTiketBarcode(result.qr_token, result.plat_nomor, result.nama_supir);
         } else {
             alert(result.error || "Gagal mencetak tiket!");
         }
@@ -204,13 +207,35 @@ async function generateTiketBarcode(e) {
     }
 }
 
+function generateTiketBarcode(qrToken, platNomor, namaSupir) {
+    document.getElementById('barcodeTokenText').innerText = qrToken;
+    document.getElementById('detailTiketText').innerText = `${platNomor} - ${namaSupir}`;
+
+    const container = document.getElementById('qrcodeCanvas');
+    container.innerHTML = "";
+
+    new QRCode(container, {
+        text: qrToken,
+        width: 160,
+        height: 160,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+
+    const modal = document.getElementById('modalCetakTiket');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
 function tutupModal() {
-    const modal = document.getElementById('modalBarcode');
+    const modal = document.getElementById('modalCetakTiket');
     modal.classList.add('hidden');
     modal.classList.remove('flex');
 
     document.getElementById('formCheckin').reset();
     document.getElementById('secNik').value = '';
+    document.getElementById('secSupirId').value = '';
     document.getElementById('secNama').value = '';
     document.getElementById('btnCetak').disabled = true;
 }

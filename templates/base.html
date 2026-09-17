@@ -4,25 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Timbangan{% endblock %} - Smart Weighbridge</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
-    <!-- Tambahkan pustaka ini di bagian <head> base.html jika ingin auto-scan barcode via kamera webcam -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>        
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>    
     {% block extra_head %}{% endblock %}
     <style>
     @media print {
         body * { visibility: hidden; }
         #printArea, #printArea * { visibility: visible; }
-        #printArea {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-        }
+        #printArea { position: absolute; top: 0; left: 0; width: 100%; }
     }
     </style>
 </head>
@@ -65,7 +60,7 @@
                 <i class="fa-solid fa-list-check mr-1"></i> Riwayat
             </a>
 
-            <!-- Auth Profile / Logout -->
+            <!-- Logout -->
             {% if current_user.is_authenticated %}
             <div class="flex items-center space-x-3 border-l border-slate-700 pl-6">
                 <span class="text-slate-300 text-xs font-medium">{{ current_user.nama_lengkap }}</span>

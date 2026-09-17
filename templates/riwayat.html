@@ -23,6 +23,7 @@
                     <th class="p-3 whitespace-nowrap">Netto (Kg)</th>
                     <th class="p-3 whitespace-nowrap">Status</th>
                     <th class="p-3 whitespace-nowrap">Hash</th>
+                    <th class="p-3 whitespace-nowrap text-right">Aksi</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-700/50">
@@ -39,8 +40,14 @@
                     <td class="p-3">
                         {% if row.Status == 'Selesai' %}
                         <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px]">SELESAI</span>
-                        {% else %}
+                        {% elif row.Status == 'Menunggu Keluar' %}
                         <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full text-[10px]">MENUNGGU KELUAR</span>
+                        {% elif row.Status == 'Perlu Cek Manual' %}
+                        <span class="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full text-[10px]">PERLU CEK MANUAL</span>
+                        {% elif row.Status == 'Dibatalkan' %}
+                        <span class="bg-slate-700 text-slate-400 border border-slate-600 px-2 py-0.5 rounded-full text-[10px]">DIBATALKAN</span>
+                        {% else %}
+                        <span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full text-[10px]">{{ row.Status|upper }}</span>
                         {% endif %}
                     </td>
                     <td class="p-3 font-mono text-[10px] text-slate-500" title="{{ row.HashKeamanan or '-' }}">
@@ -50,10 +57,42 @@
                             -
                         {% endif %}
                     </td>
+                    <td class="p-3 text-right">
+                        {% if row.Status not in ['Dibatalkan', 'Selesai'] %}
+                        <button onclick="batalkanTransaksi({{ row.Id }})" class="text-red-400 hover:text-red-300 text-xs whitespace-nowrap">
+                            <i class="fa-solid fa-ban mr-1"></i>Batalkan
+                        </button>
+                        {% elif row.Status == 'Dibatalkan' %}
+                        <span class="text-slate-600 text-[10px]" title="{{ row.AlasanBatal }}">Sudah Batal</span>
+                        {% else %}
+                        <span class="text-slate-600 text-[10px]">-</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function batalkanTransaksi(id) {
+    const alasan = prompt("Alasan pembatalan transaksi ini:");
+    if (!alasan) return;
+
+    const formData = new FormData();
+    formData.append('alasan', alasan);
+
+    try {
+        const res = await fetch(`/riwayat/batalkan/${id}`, { method: 'POST', body: formData });
+        const data = await res.json();
+        alert(data.message || data.error || "Terjadi kesalahan");
+        if (data.message) location.reload();
+    } catch (err) {
+        alert("Gagal menghubungi server: " + err);
+    }
+}
+</script>
 {% endblock %}

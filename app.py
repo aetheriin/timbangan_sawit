@@ -4,26 +4,25 @@ import uuid
 from flask import Flask, request, jsonify, render_template, redirect
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
-
+from utils.auth import User
+from utils.timbang_state import mulai_simulasi, baca_status, reset_sesi
+from utils.verifikasi_state import set_terverifikasi, get_verifikasi, reset_verifikasi
 from utils.face_utils import (
     extract_embedding, embedding_to_binary, binary_to_embedding, 
     compare_faces, verifikasi_liveness
 )
-from utils.auth import User
 from utils.db_utils import (
     get_connection, insert_supir, get_all_supir, get_daftar_supir, get_supir_by_id,
     get_or_create_kendaraan, catat_timbang_masuk, catat_timbang_keluar, get_riwayat_transaksi, 
     get_user_by_username, update_last_login, cek_nik_supir_ada, cari_wajah_mirip_supir, 
     get_dashboard_summary_timbang, buat_tiket_security, cari_transaksi_by_qr, nonaktifkan_supir, 
-    get_supir_lengkap_by_id, update_supir
+    get_supir_lengkap_by_id, update_supir, batalkan_transaksi
 )
-from utils.timbang_state import mulai_simulasi, baca_status, reset_sesi
-from utils.verifikasi_state import set_terverifikasi, get_verifikasi, reset_verifikasi
 
 app = Flask(__name__)
 app.secret_key = "ganti-dengan-random-string-rahasia"
 
-# Pastikan folder upload ada agar tidak crash saat save file
+# Cek folder upload
 UPLOAD_FOLDER = os.path.join("static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -73,9 +72,7 @@ def logout():
     logout_user()
     return redirect("/login")
 
-# -----------------------------------------------------------------------------
 # 1. POS SECURITY CHECK-IN & TRIGGER KAMERA
-# -----------------------------------------------------------------------------
 @app.route("/security")
 @login_required
 def security_page():
@@ -110,20 +107,13 @@ def api_cetak_tiket():
     """Security menginput plat nomor & generate UUID acak untuk QR Code Struk yang tersimpan di DB."""
     data = request.json or {}
     plat_nomor = data.get("plat_nomor", "").strip().upper()
-    nik_supir = data.get("nik", "").strip()
+    supir_id = data.get("supir_id", "").strip()
     nama_supir = data.get("nama", "").strip()
 
-    if not plat_nomor or not nik_supir:
-        return jsonify({"error": "Plat nomor dan NIK supir wajib diisi"}), 400
+    if not plat_nomor or not supir_id:
+        return jsonify({"error": "Plat nomor dan data supir wajib diisi"}), 400
 
-    # 1. Ambil ID supir dari Database berdasarkan NIK (atau ID yang dikirim)
-    supir = get_supir_by_id(nik_supir)
-    supir_id = supir.Id if supir else nik_supir
-
-    # 2. Tokenisasi QR Code (UUID Acak)
     qr_token = f"TKT-{uuid.uuid4().hex[:8].upper()}"
-
-    # 3. Simpan langsung ke database via db_utils
     buat_tiket_security(supir_id, plat_nomor, qr_token)
 
     return jsonify({
@@ -133,9 +123,7 @@ def api_cetak_tiket():
         "nama_supir": nama_supir
     }), 200
 
-# -----------------------------------------------------------------------------
 # 2. POS JEMBATAN TIMBANG (BRUTO & TARA)
-# -----------------------------------------------------------------------------
 @app.route("/timbang")
 @login_required
 def timbang():
@@ -164,7 +152,7 @@ def api_scan_qr():
         "status": row.Status
     }
 
-    # Set state terverifikasi agar kompatibel dengan sistem timbang
+    # Set state terverifikasi
     set_terverifikasi(row.SupirId, row.NamaSupir)
 
     return jsonify({
@@ -212,9 +200,7 @@ def timbang_kunci():
         return jsonify({"message": f"Timbang KELUAR tercatat, TAPI netto tidak valid ({netto} kg) — perlu Manual Check", "perlu_manual_check": True}), 200
     return jsonify({"message": f"Timbang KELUAR berhasil. Berat: {berat} kg, Netto: {netto} kg"}), 200
 
-# -----------------------------------------------------------------------------
 # 3. VERIFIKASI WAJAH & LIVENESS (DARI KIOSK_TIMBANG.PY)
-# -----------------------------------------------------------------------------
 @app.route("/timbang/verifikasi-wajah", methods=["POST"])
 def verifikasi_wajah_timbang():
     files = request.files.getlist("frames")
@@ -251,13 +237,14 @@ def verifikasi_wajah_timbang():
             return jsonify({"error": "Supir tidak dikenali"}), 404
 
         supir_id, nama = match_found
-        set_terverifikasi(supir_id, nama)
-        
-        # Reset Trigger Kamera setelah berhasil scan
+        detail = get_supir_by_id(supir_id)
+        nik_asli = detail.NIK if detail else None
+        set_terverifikasi(supir_id, nama, nik_asli)
+
         camera_trigger_state["is_active"] = False
         camera_trigger_state["last_scanned_driver"] = {"supir_id": supir_id, "nama": nama}
 
-        return jsonify({"message": f"Terverifikasi: {nama}", "nik": supir_id, "nama": nama}), 200
+        return jsonify({"message": f"Terverifikasi: {nama}", "nik": nik_asli, "nama": nama}), 200
 
     finally:
         # OPTIMASI: Hapus file temporer frame JPEG
@@ -273,11 +260,14 @@ def status_verifikasi():
     v = get_verifikasi()
     if v is None:
         return jsonify({"terverifikasi": False})
-    return jsonify({"terverifikasi": True, "supir_id": v["supir_id"], "nama": v["nama"]})
+    return jsonify({
+        "terverifikasi": True,
+        "supir_id": v["supir_id"],
+        "nama": v["nama"],
+        "nik": v.get("nik")
+    })
 
-# -----------------------------------------------------------------------------
 # 4. RIWAYAT & MANAGEMENT SUPIR
-# -----------------------------------------------------------------------------
 @app.route("/riwayat")
 @login_required
 def riwayat():
@@ -375,6 +365,15 @@ def supir_edit(supir_id):
 
     update_supir(supir_id, nama, nik if nik else None, nomor_sim, sim_berlaku, embedding_binary, foto_path)
     return jsonify({"message": f"Data '{nama}' berhasil diperbarui"}), 200
+
+@app.route("/riwayat/batalkan/<int:transaksi_id>", methods=["POST"])
+@login_required
+def riwayat_batalkan(transaksi_id):
+    alasan = request.form.get("alasan", "").strip()
+    if not alasan:
+        return jsonify({"error": "Alasan pembatalan wajib diisi"}), 400
+    batalkan_transaksi(transaksi_id, alasan, current_user.nama_lengkap)
+    return jsonify({"message": "Transaksi ditandai batal"}), 200
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
