@@ -1,3 +1,3 @@
 USE TimbanganSawitDB;
 
-ALTER TABLE TransaksiTimbang ADD AlasanBatal VARCHAR(255) NULL;
+select * from TransaksiTimbang where NomorTiket = 'TKT-DB2BAB13';

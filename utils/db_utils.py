@@ -1,14 +1,16 @@
+import os
 import hashlib
-from datetime import date, datetime
 import pyodbc
+from dotenv import load_dotenv
+from datetime import date, datetime
 from config import get_connection_string
 
+load_dotenv()
 
 def get_connection():
   return pyodbc.connect(get_connection_string())
 
 # SUPIR
-
 def insert_supir(
     nama,
     embedding_binary,
@@ -93,7 +95,6 @@ def update_supir(supir_id, nama, nik, nomor_sim, sim_berlaku, embedding_binary=N
     conn.close()
 
 # KENDARAAN
-
 def get_or_create_kendaraan(plat_nomor, jenis_truk=None):
   conn = get_connection()
   cursor = conn.cursor()
@@ -115,16 +116,17 @@ def get_or_create_kendaraan(plat_nomor, jenis_truk=None):
   return kendaraan_id
 
 # TRANSAKSI TIMBANG & SECURITY (TOKENIZATION & HASH)
-
 def hitung_hash(
     nomor_tiket,
     supir_id,
     plat_nomor,
     berat_bruto,
     berat_tara=0,
-    secret_key="ganti-secret-key-rahasia",
+    secret_key=None,
 ):
-  """Menghitung Hash Keamanan SHA-256 untuk mendeteksi integritas data timbangan."""
+  """Menghitung Hash Keamanan SHA-256 """
+  if secret_key is None:
+      secret_key = os.getenv("HASH_SECRET_KEY")
   data = (
       f"{nomor_tiket}{supir_id}{plat_nomor}{berat_bruto}{berat_tara}{secret_key}"
   )
@@ -241,7 +243,6 @@ def catat_timbang_keluar(transaksi_id, berat_tara):
     return None, None
 
 # USER MANAGEMENT & DASHBOARD SUMMARY
-
 def get_riwayat_transaksi():
     conn = get_connection()
     cursor = conn.cursor()

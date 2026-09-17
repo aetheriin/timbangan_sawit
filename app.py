@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, redirect
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -19,8 +20,10 @@ from utils.db_utils import (
     get_supir_lengkap_by_id, update_supir, batalkan_transaksi
 )
 
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = "ganti-dengan-random-string-rahasia"
+app.secret_key = os.getenv("SECRET_KEY")
 
 # Cek folder upload
 UPLOAD_FOLDER = os.path.join("static", "uploads")
