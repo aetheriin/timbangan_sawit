@@ -2,7 +2,7 @@
 {% block title %}Riwayat Transaksi{% endblock %}
 
 {% block content %}
-<div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+<div class="panel">
     <div class="flex justify-between items-center mb-4">
         <h2 class="text-base font-bold text-white flex items-center gap-2">
             <i class="fa-solid fa-list-check text-emerald-400"></i> Riwayat Transaksi Timbangan
@@ -11,19 +11,19 @@
 
     <div class="overflow-x-auto">
         <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-900/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+            <thead class="table-header-row">
                 <tr>
-                    <th class="p-3 whitespace-nowrap">Tiket</th>
-                    <th class="p-3 whitespace-nowrap">Supir</th>
-                    <th class="p-3 whitespace-nowrap">Plat</th>
-                    <th class="p-3 whitespace-nowrap">Masuk</th>
-                    <th class="p-3 whitespace-nowrap">Bruto (Kg)</th>
-                    <th class="p-3 whitespace-nowrap">Keluar</th>
-                    <th class="p-3 whitespace-nowrap">Tara (Kg)</th>
-                    <th class="p-3 whitespace-nowrap">Netto (Kg)</th>
-                    <th class="p-3 whitespace-nowrap">Status</th>
-                    <th class="p-3 whitespace-nowrap">Hash</th>
-                    <th class="p-3 whitespace-nowrap text-right">Aksi</th>
+                    <th class="table-cell">Tiket</th>
+                    <th class="table-cell">Supir</th>
+                    <th class="table-cell">Plat</th>
+                    <th class="table-cell">Masuk</th>
+                    <th class="table-cell">Bruto (Kg)</th>
+                    <th class="table-cell">Keluar</th>
+                    <th class="table-cell">Tara (Kg)</th>
+                    <th class="table-cell">Netto (Kg)</th>
+                    <th class="table-cell">Status</th>
+                    <th class="table-cell">Hash</th>
+                    <th class="table-cell text-right">Aksi</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-700/50">
@@ -39,23 +39,19 @@
                     <td class="p-3 font-mono font-bold text-emerald-400">{{ "{:,.0f}".format(row.BeratNetto) if row.BeratNetto else '-' }}</td>
                     <td class="p-3">
                         {% if row.Status == 'Selesai' %}
-                        <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px]">SELESAI</span>
+                        <span class="badge-status bg-emerald-500/10 text-emerald-400 border-emerald-500/20">SELESAI</span>
                         {% elif row.Status == 'Menunggu Keluar' %}
-                        <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full text-[10px]">MENUNGGU KELUAR</span>
+                        <span class="badge-status bg-amber-500/10 text-amber-400 border-amber-500/20">MENUNGGU KELUAR</span>
                         {% elif row.Status == 'Perlu Cek Manual' %}
-                        <span class="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full text-[10px]">PERLU CEK MANUAL</span>
+                        <span class="badge-status bg-red-500/10 text-red-400 border-red-500/20">PERLU CEK MANUAL</span>
                         {% elif row.Status == 'Dibatalkan' %}
-                        <span class="bg-slate-700 text-slate-400 border border-slate-600 px-2 py-0.5 rounded-full text-[10px]">DIBATALKAN</span>
+                        <span class="badge-status bg-slate-700 text-slate-400 border-slate-600">DIBATALKAN</span>
                         {% else %}
-                        <span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full text-[10px]">{{ row.Status|upper }}</span>
+                        <span class="badge-status bg-blue-500/10 text-blue-400 border-blue-500/20">{{ row.Status|upper }}</span>
                         {% endif %}
                     </td>
                     <td class="p-3 font-mono text-[10px] text-slate-500" title="{{ row.HashKeamanan or '-' }}">
-                        {% if row.HashKeamanan %}
-                            {{ row.HashKeamanan[:12] }}...
-                        {% else %}
-                            -
-                        {% endif %}
+                        {% if row.HashKeamanan %}{{ row.HashKeamanan[:12] }}...{% else %}-{% endif %}
                     </td>
                     <td class="p-3 text-right space-y-1">
                         {% if row.Status == 'Perlu Cek Manual' %}
@@ -68,11 +64,9 @@
                                     <i class="fa-solid fa-xmark mr-1"></i>Tolak
                                 </button>
                                 {% if row.CatatanManual %}
-                                <button
-                                    class="lihat-bukti-btn text-blue-400 hover:text-blue-300 text-[10px]"
-                                    data-catatan="{{ row.CatatanManual }}"
-                                    data-foto="{{ url_for('static', filename=row.FotoBuktiManual) if row.FotoBuktiManual else '' }}"
-                                >
+                                <button class="lihat-bukti-btn text-blue-400 hover:text-blue-300 text-[10px]"
+                                        data-catatan="{{ row.CatatanManual }}"
+                                        data-foto="{{ url_for('static', filename=row.FotoBuktiManual) if row.FotoBuktiManual else '' }}">
                                     <i class="fa-solid fa-eye mr-1"></i>Lihat Bukti
                                 </button>
                                 {% endif %}
@@ -101,131 +95,43 @@
                 {% endfor %}
             </tbody>
         </table>
-        <div id="modalBukti" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-50 p-4">
-            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-sm w-full space-y-4">
+
+        <div id="modalBukti" class="modal-overlay">
+            <div class="modal-box max-w-sm">
                 <h3 class="text-white font-bold text-sm">Tambah Catatan/Bukti</h3>
                 <form id="formBukti" enctype="multipart/form-data" class="space-y-3">
-                    <textarea name="catatan" required placeholder="Jelaskan kondisi truk/timbangan..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none" rows="3"></textarea>
-                    <input type="file" name="foto" accept="image/*" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                    <textarea name="catatan" required placeholder="Jelaskan kondisi truk/timbangan..." class="input-field" rows="3"></textarea>
+                    <input type="file" name="foto" accept="image/*" class="input-field text-xs">
                     <div class="flex gap-2">
-                        <button type="button" onclick="closeModal('modalBukti')" class="flex-1 bg-slate-700 text-white text-xs py-2 rounded-xl">Batal</button>
-                        <button type="submit" class="flex-1 bg-blue-600 text-white text-xs py-2 rounded-xl">Kirim</button>
+                        <button type="button" onclick="closeModal('modalBukti')" class="flex-1 btn-secondary">Batal</button>
+                        <button type="submit" class="flex-1 btn-primary">Kirim</button>
                     </div>
                 </form>
             </div>
-        </div>  
-        <div id="modalLihatBukti" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-50 p-4">
-            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full space-y-4">
+        </div>
+
+        <div id="modalLihatBukti" class="modal-overlay">
+            <div class="modal-box">
                 <div class="flex justify-between items-center border-b border-slate-700 pb-3">
                     <h3 class="text-white font-bold text-sm">Catatan & Bukti dari Site</h3>
                     <button onclick="closeModal('modalLihatBukti')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-
                 <div>
                     <p class="text-xs text-slate-400 mb-1">Catatan:</p>
                     <p id="lihatBuktiCatatan" class="text-sm text-slate-200 bg-slate-900 border border-slate-700 rounded-xl p-3"></p>
                 </div>
-
                 <div id="lihatBuktiFotoWrapper">
                     <p class="text-xs text-slate-400 mb-1">Foto Bukti:</p>
                     <img id="lihatBuktiFoto" class="w-full rounded-xl border border-slate-700" src="" alt="Foto bukti">
                 </div>
                 <p id="lihatBuktiTanpaFoto" class="text-xs text-slate-500 italic hidden">Tidak ada foto bukti dilampirkan</p>
-
-                <button onclick="closeModal('modalLihatBukti')" class="w-full bg-slate-700 hover:bg-slate-600 text-white text-sm py-2.5 rounded-xl">
-                    Tutup
-                </button>
+                <button onclick="closeModal('modalLihatBukti')" class="w-full btn-secondary py-2.5">Tutup</button>
             </div>
-        </  div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-    // ===== MODAL HELPER (dipakai semua modal) =====
-    function openModal(id) {
-        document.getElementById(id).classList.remove('hidden');
-        document.getElementById(id).classList.add('flex');
-    }
-    function closeModal(id) {
-        document.getElementById(id).classList.remove('flex');
-        document.getElementById(id).classList.add('hidden');
-    }
-
-    let transaksiIdAktif = null;
-
-    // ===== 1. SECURITY/OPERATOR: TAMBAH BUKTI =====
-    function tambahBukti(id) {
-        transaksiIdAktif = id;
-        openModal('modalBukti');
-    }
-
-    document.getElementById('formBukti').addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        const res = await fetch(`/riwayat/tambah-bukti/${transaksiIdAktif}`, { method: 'POST', body: formData });
-        const data = await res.json();
-        alert(data.message || data.error);
-        if (data.message) location.reload();
-    });
-
-    // ===== 2. ADMIN: LIHAT BUKTI DARI SITE =====
-    document.querySelectorAll('.lihat-bukti-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const catatan = this.dataset.catatan;
-            const foto = this.dataset.foto;
-
-            document.getElementById('lihatBuktiCatatan').textContent = catatan;
-
-            const fotoWrapper = document.getElementById('lihatBuktiFotoWrapper');
-            const tanpaFoto = document.getElementById('lihatBuktiTanpaFoto');
-            const fotoImg = document.getElementById('lihatBuktiFoto');
-
-            if (foto) {
-                fotoImg.src = foto;
-                fotoWrapper.classList.remove('hidden');
-                tanpaFoto.classList.add('hidden');
-            } else {
-                fotoWrapper.classList.add('hidden');
-                tanpaFoto.classList.remove('hidden');
-            }
-
-            openModal('modalLihatBukti');
-        });
-    });
-
-    // ===== 3. ADMIN: SETUJUI TRANSAKSI =====
-    async function setujuiTransaksi(id) {
-        if (!confirm("Setujui transaksi ini jadi Selesai?")) return;
-        const res = await fetch(`/riwayat/setujui/${id}`, { method: 'POST' });
-        const data = await res.json();
-        alert(data.message || data.error);
-        if (data.message) location.reload();
-    }
-
-    // ===== 4. ADMIN: TOLAK TRANSAKSI =====
-    async function tolakTransaksi(id) {
-        const alasan = prompt("Alasan penolakan:");
-        if (!alasan) return;
-        const formData = new FormData();
-        formData.append('alasan', alasan);
-        const res = await fetch(`/riwayat/tolak/${id}`, { method: 'POST', body: formData });
-        const data = await res.json();
-        alert(data.message || data.error);
-        if (data.message) location.reload();
-    }
-
-    // ===== 5. ADMIN: BATALKAN TRANSAKSI =====
-    async function batalkanTransaksi(id) {
-        const alasan = prompt("Alasan pembatalan transaksi ini:");
-        if (!alasan) return;
-        const formData = new FormData();
-        formData.append('alasan', alasan);
-        const res = await fetch(`/riwayat/batalkan/${id}`, { method: 'POST', body: formData });
-        const data = await res.json();
-        alert(data.message || data.error);
-        if (data.message) location.reload();
-    }
-</script>
+<script src="{{ url_for('static', filename='js/riwayat.js') }}"></script>
 {% endblock %}

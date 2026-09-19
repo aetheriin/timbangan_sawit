@@ -1,0 +1,164 @@
+let html5QrCode = null;
+let pollingTimbang = null;
+let siapKunci = false;
+let tiketAktif = null;
+
+async function bukaModalScanQR() {
+    openModal('modalScanQR');
+
+    if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("qr-reader");
+    }
+
+    const config = {
+        fps: 15,
+        qrbox: { width: 250, height: 250 },
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+    };
+
+    try {
+        await html5QrCode.start({ facingMode: "user" }, config, onScanSuccess);
+    } catch (err) {
+        alert("Gagal mengaktifkan kamera scanner: " + err);
+        tutupModalQR();
+    }
+}
+
+async function onScanSuccess(decodedText) {
+    document.getElementById('scanStatusText').classList.remove('hidden');
+    await stopQrScanner();
+
+    try {
+        const res = await fetch('/api/timbang/scan-qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qr_token: decodedText.trim() })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.status === 'SUCCESS') {
+            tiketAktif = data.tiket;
+            tutupModalQR();
+
+            document.getElementById('platNomor').value = tiketAktif.plat_nomor;
+            document.getElementById('iconVerifikasi').className = "w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center";
+            document.getElementById('iconVerifikasi').innerHTML = '<i class="fa-solid fa-check"></i>';
+            document.getElementById('teksVerifikasi').textContent = `Supir: ${tiketAktif.nama} (${tiketAktif.nik})`;
+            document.getElementById('subTeksVerifikasi').textContent = `Tiket QR: ${tiketAktif.qr_token} | Status: ${tiketAktif.status}`;
+
+            mulaiTimbang();
+        } else {
+            alert(data.error || "Tiket QR tidak ditemukan di database!");
+            tutupModalQR();
+        }
+    } catch (err) {
+        alert("Gagal memproses tiket QR ke backend.");
+        tutupModalQR();
+    }
+}
+
+async function stopQrScanner() {
+    if (html5QrCode && html5QrCode.isScanning) {
+        try { await html5QrCode.stop(); } catch (e) { console.log("Scanner stop delay"); }
+    }
+}
+
+async function tutupModalQR() {
+    await stopQrScanner();
+    document.getElementById('scanStatusText').classList.add('hidden');
+    closeModal('modalScanQR');
+}
+
+async function mulaiTimbang() {
+    document.getElementById('hasilBox').classList.add('hidden');
+    await fetch('/timbang/mulai', { method: 'POST' });
+    if (pollingTimbang) clearInterval(pollingTimbang);
+    pollingTimbang = setInterval(cekStatusTimbang, 300);
+}
+
+async function cekStatusTimbang() {
+    try {
+        const response = await fetch('/timbang/status');
+        const data = await response.json();
+
+        document.getElementById('beratDisplay').textContent = data.berat;
+
+        const badge = document.getElementById('statusBadge');
+        const btnKunci = document.getElementById('btnKunci');
+
+        if (data.siap_kunci) {
+            badge.className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400";
+            badge.textContent = "STABIL — Siap Dikunci";
+            siapKunci = true;
+
+            if (tiketAktif) {
+                btnKunci.disabled = false;
+                btnKunci.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2";
+                btnKunci.innerHTML = '<i class="fa-solid fa-lock-open mr-2"></i>Kunci Berat & Simpan Transaksi';
+            }
+        } else if (data.stabil) {
+            badge.className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400";
+            badge.textContent = "Menstabilkan angka berat...";
+            siapKunci = false;
+        } else {
+            badge.className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400";
+            badge.textContent = "Berat sedang naik / berubah...";
+            siapKunci = false;
+        }
+    } catch (e) {
+        console.error("Polling error:", e);
+    }
+}
+
+async function kunciTimbang() {
+    if (!siapKunci || !tiketAktif) return;
+
+    const plat = document.getElementById('platNomor').value.trim();
+    if (!plat) {
+        tampilkanHasil("Plat nomor tidak terdeteksi!", false);
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('plat_nomor', plat);
+    formData.append('qr_token', tiketAktif.qr_token);
+
+    try {
+        const response = await fetch('/timbang/kunci', { method: 'POST', body: formData });
+        const data = await response.json();
+        tampilkanHasil(data.message || data.error, response.ok);
+
+        if (response.ok) {
+            if (pollingTimbang) clearInterval(pollingTimbang);
+            resetTampilan();
+        }
+    } catch (err) {
+        tampilkanHasil("Gagal memproses penguncian berat", false);
+    }
+}
+
+function tampilkanHasil(teks, sukses) {
+    const box = document.getElementById('hasilBox');
+    box.className = sukses
+        ? "p-4 rounded-xl text-sm bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-medium"
+        : "p-4 rounded-xl text-sm bg-red-500/10 border border-red-500/30 text-red-300 font-medium";
+    box.textContent = teks;
+    box.classList.remove('hidden');
+}
+
+function resetTampilan() {
+    tiketAktif = null;
+    siapKunci = false;
+    document.getElementById('beratDisplay').textContent = "0";
+    document.getElementById('statusBadge').className = "inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300";
+    document.getElementById('statusBadge').textContent = "Menunggu scan tiket QR...";
+    document.getElementById('btnKunci').disabled = true;
+    document.getElementById('btnKunci').className = "w-full bg-slate-700 text-slate-500 font-semibold py-3 rounded-xl cursor-not-allowed transition flex items-center justify-center gap-2";
+    document.getElementById('btnKunci').innerHTML = '<i class="fa-solid fa-lock"></i> Kunci Berat & Catat Transaksi';
+    document.getElementById('platNomor').value = "";
+
+    document.getElementById('iconVerifikasi').className = "w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-400";
+    document.getElementById('iconVerifikasi').innerHTML = '<i class="fa-solid fa-ticket"></i>';
+    document.getElementById('teksVerifikasi').textContent = "Belum ada tiket QR yang di-scan";
+    document.getElementById('subTeksVerifikasi').textContent = "Arahkan kertas tiket dari Pos Security ke kamera scanner";
+}

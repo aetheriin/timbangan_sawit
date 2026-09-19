@@ -1,0 +1,26 @@
+{
+  "name": "timbangan_sawit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build-css": "tailwindcss -i ./static/css/tailwind-source.css -o ./static/css/tailwind.css",
+    "watch-css": "tailwindcss -i ./static/css/tailwind-source.css -o ./static/css/tailwind.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aetheriin/timbangan_sawit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/aetheriin/timbangan_sawit/issues"
+  },
+  "homepage": "https://github.com/aetheriin/timbangan_sawit#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

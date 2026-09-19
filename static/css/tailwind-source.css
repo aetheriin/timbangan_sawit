@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Panel & Card */
+  .panel {
+    @apply bg-slate-800 border border-slate-700 rounded-xl p-6;
+  }
+  .stat-card {
+    @apply bg-slate-800 border border-slate-700 p-5 rounded-xl flex items-center justify-between;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition;
+  }
+  .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-xs transition;
+  }
+  .btn-danger-text {
+    @apply text-red-400 hover:text-red-300 text-xs transition;
+  }
+  .btn-info-text {
+    @apply text-blue-400 hover:text-blue-300 text-xs transition;
+  }
+
+  /* Form fields */
+  .input-field {
+    @apply w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500;
+  }
+  .field-label {
+    @apply block text-xs font-semibold text-slate-400 mb-1.5;
+  }
+
+  /* Table */
+  .table-header-row {
+    @apply bg-slate-900/50 text-slate-400 uppercase font-semibold border-b border-slate-700;
+  }
+  .table-cell {
+    @apply p-3 whitespace-nowrap;
+  }
+
+  /* Badges status */
+  .badge-success {
+    @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px];
+  }
+  .badge-warning {
+    @apply bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full text-[10px];
+  }
+  .badge-danger {
+    @apply bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full text-[10px];
+  }
+  .badge-neutral {
+    @apply bg-slate-700 text-slate-400 border border-slate-600 px-2 py-0.5 rounded-full text-[10px];
+  }
+  .badge-info {
+    @apply bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full text-[10px];
+  }
+  .badge-status {
+    @apply px-2 py-0.5 rounded-full text-[10px] border;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    @apply fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-50 p-4;
+  }
+  .modal-box {
+    @apply bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4;
+  }
+  .modal-overlay-dark {
+    @apply fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4;
+  }
+
+  /* Navigation */
+  .nav-link {
+    @apply text-slate-300 hover:text-white transition;
+  }
+  .nav-link-active {
+    @apply text-emerald-400 font-semibold;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-white flex items-center gap-2;
+  }
+  .page-subtitle {
+    @apply text-xs text-slate-400 mt-1;
+  }
+
+  .status-pill-ready {
+    @apply text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-full font-medium flex items-center gap-2;
+  }
+}

@@ -1,0 +1,100 @@
+BAGIAN A: Integrasi ke timbangan riil (ganti simulasi dummy)
+1. Langkah pertama di lokasi — cari tahu protokol data (WAJIB sebelum coding apapun)
+
+Ini sama seperti yang kita bahas jauh sebelumnya — belum bisa ditulis kodenya sampai kamu tahu format data yang keluar dari indikator timbangan.
+
+install berikut ini :
+    pip install pyserial
+
+Buat file cek_protokol.py
+
+import serial
+
+PORT = "COM3"  # sesuaikan setelah cek Device Manager
+BAUDRATE = 9600  # coba 9600 dulu, kalau data aneh coba 4800/19200/2400
+
+ser = serial.Serial(PORT, BAUDRATE, timeout=1)
+print(f"Mendengarkan {PORT} @ {BAUDRATE} baud... (Ctrl+C untuk stop)")
+
+while True:
+    data = ser.readline()
+    if data:
+        print(f"RAW: {data}")
+
+
+
+
+2. Struktur kode yang akan menggantikan simulasi (kerangka, tunggu data asli)
+
+Buat utils/serial_reader.py (menggantikan timbang_state.py untuk sumber data):
+
+import serial
+import threading
+import time
+import re
+
+PORT = "COM3"
+BAUDRATE = 9600
+
+_state = {"berat": 0, "stabil": False, "terhubung": False}
+_lock = threading.Lock()
+
+def parse_data_timbangan(raw_line):
+    """
+    SESUAIKAN fungsi ini setelah tahu format asli dari indikator.
+    Contoh placeholder untuk format 'ST,GS,+00125.5,kg':
+    """
+    try:
+        teks = raw_line.decode('ascii', errors='ignore').strip()
+        stabil = teks.startswith('ST')
+        angka = re.search(r'[-+]?\d+\.?\d*', teks)
+        berat = float(angka.group()) if angka else 0
+        return berat, stabil
+    except Exception:
+        return None, False
+
+def _loop_baca_serial():
+    global _state
+    while True:
+        try:
+            ser = serial.Serial(PORT, BAUDRATE, timeout=1)
+            with _lock:
+                _state["terhubung"] = True
+            while True:
+                raw = ser.readline()
+                if raw:
+                    berat, stabil = parse_data_timbangan(raw)
+                    if berat is not None:
+                        with _lock:
+                            _state["berat"] = berat
+                            _state["stabil"] = stabil
+        except serial.SerialException:
+            with _lock:
+                _state["terhubung"] = False
+            time.sleep(3)  # coba sambung ulang tiap 3 detik kalau kabel lepas
+
+def mulai_pembacaan_serial():
+    thread = threading.Thread(target=_loop_baca_serial, daemon=True)
+    thread.start()
+
+def baca_status_asli():
+    with _lock:
+        return dict(_state)
+
+
+
+Kenapa pakai thread terpisah: timbangan asli terus-menerus mengirim data (bukan sekali diminta seperti simulasi kita) — jadi perlu proses yang selalu mendengarkan di background, terlepas dari request web yang masuk kapan saja.
+
+Update app.py — panggil sekali saat startup:
+
+
+from utils.serial_reader import mulai_pembacaan_serial, baca_status_asli
+
+mulai_pembacaan_serial()  # taruh setelah app = Flask(__name__)
+
+@app.route("/timbang/status")
+def timbang_status():
+    status = baca_status_asli()
+    # sesuaikan logic siap_kunci dengan status dari serial asli,
+    # bisa tambah pengecekan durasi stabil seperti versi simulasi
+    return jsonify(status)
